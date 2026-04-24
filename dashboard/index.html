@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Hillsborough Motivated Seller Leads</title>
+<style>
+  :root {
+    --bg:#0f1117;--surface:#1a1d27;--card:#22263a;--border:#2e3250;
+    --accent:#4f8ef7;--green:#34d399;--yellow:#fbbf24;--red:#f87171;
+    --text:#e2e8f0;--muted:#8892b0;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:'Segoe UI',sans-serif;font-size:14px}
+  header{background:var(--surface);border-bottom:1px solid var(--border);padding:16px 24px;display:flex;align-items:center;gap:16px}
+  header h1{font-size:18px;font-weight:700}
+  .meta{margin-left:auto;color:var(--muted);font-size:12px;text-align:right}
+  .stats{display:flex;gap:12px;padding:16px 24px;flex-wrap:wrap}
+  .stat{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 20px;min-width:140px}
+  .stat .val{font-size:28px;font-weight:700;color:var(--accent)}
+  .stat .lbl{color:var(--muted);font-size:11px;margin-top:2px}
+  .controls{padding:0 24px 12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .controls input,.controls select{background:var(--surface);border:1px solid var(--border);color:var(--text);padding:7px 12px;border-radius:6px;font-size:13px;outline:none}
+  .controls input{width:220px}
+  .controls input:focus,.controls select:focus{border-color:var(--accent)}
+  .btn{background:var(--accent);color:#fff;border:none;border-radius:6px;padding:7px 16px;cursor:pointer;font-size:13px;font-weight:600}
+  .btn:hover{opacity:.85}
+  .btn.sec{background:var(--card);border:1px solid var(--border)}
+  .table-wrap{padding:0 24px 32px;overflow-x:auto}
+  table{width:100%;border-collapse:collapse}
+  thead th{background:var(--card);color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.06em;padding:10px 12px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap}
+  tbody tr{border-bottom:1px solid var(--border)}
+  tbody tr:hover{background:var(--card)}
+  td{padding:9px 12px;vertical-align:top}
+  .pill{display:inline-block;border-radius:999px;padding:2px 10px;font-size:12px;font-weight:700}
+  .high{background:#14532d;color:var(--green)}
+  .mid{background:#78350f;color:var(--yellow)}
+  .low{background:#450a0a;color:var(--red)}
+  .flag{display:inline-block;background:#1e2a4a;color:#93c5fd;border-radius:4px;padding:1px 7px;font-size:11px;margin:1px 2px 1px 0}
+  .flag.red{background:#450a0a;color:var(--red)}
+  .flag.grn{background:#14532d;color:var(--green)}
+  .flag.ylw{background:#78350f;color:var(--yellow)}
+  a.lnk{color:var(--accent);text-decoration:none;font-size:12px}
+  a.lnk:hover{text-decoration:underline}
+  .sub{font-size:12px;color:var(--muted);margin-top:2px}
+  .amt{font-weight:600;color:var(--yellow)}
+  .empty{text-align:center;padding:60px;color:var(--muted)}
+  #count{color:var(--muted);font-size:13px;margin-left:auto}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>🏠 Hillsborough Motivated Seller Leads</h1>
+    <div class="sub" style="margin-top:3px">Hillsborough County Clerk of Courts — Auto-updated daily</div>
+  </div>
+  <div class="meta" id="meta">Loading…</div>
+</header>
+<div class="stats" id="stats"></div>
+<div class="controls">
+  <input type="text" id="q" placeholder="Search owner, address, doc #…"/>
+  <select id="ftype"><option value="">All Document Types</option></select>
+  <select id="fcat">
+    <option value="">All Categories</option>
+    <option value="foreclosure">Foreclosure / LP</option>
+    <option value="judgment">Judgment</option>
+    <option value="lien">Lien</option>
+    <option value="tax">Tax</option>
+    <option value="probate">Probate</option>
+    <option value="construction">Notice of Commencement</option>
+    <option value="release">Release LP</option>
+  </select>
+  <select id="fscore">
+    <option value="">All Scores</option>
+    <option value="high">High (70+)</option>
+    <option value="mid">Medium (50-69)</option>
+    <option value="low">Low (&lt;50)</option>
+  </select>
+  <button class="btn sec" onclick="exportCSV()">⬇ Export CSV</button>
+  <span id="count"></span>
+</div>
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Score</th><th>Filed</th><th>Doc Type</th><th>Owner</th>
+        <th>Property Address</th><th>Mailing Address</th>
+        <th>Amount</th><th>Flags</th><th>Doc Link</th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+  <div id="empty" class="empty" style="display:none">No records match your filters.</div>
+</div>
+<script>
+let ALL=[];
+async function load(){
+  try{
+    const r=await fetch('records.json?_='+Date.now());
+    const d=await r.json();
+    ALL=d.records||[];
+    document.getElementById('meta').innerHTML=
+      `Fetched: <strong>${d.fetched_at?new Date(d.fetched_at).toLocaleString():'—'}</strong><br>
+       Range: ${d.date_range?.from||'—'} → ${d.date_range?.to||'—'}`;
+    const cats={};
+    ALL.forEach(r=>{cats[r.cat_label]=(cats[r.cat_label]||0)+1});
+    const hi=ALL.filter(r=>r.score>=70).length;
+    let sh=`<div class="stat"><div class="val">${ALL.length}</div><div class="lbl">Total Leads</div></div>
+            <div class="stat"><div class="val">${d.with_address}</div><div class="lbl">With Address</div></div>
+            <div class="stat"><div class="val" style="color:var(--green)">${hi}</div><div class="lbl">High Score (70+)</div></div>`;
+    Object.entries(cats).sort((a,b)=>b[1]-a[1]).slice(0,5).forEach(([k,v])=>{
+      sh+=`<div class="stat"><div class="val">${v}</div><div class="lbl">${k}</div></div>`;
+    });
+    document.getElementById('stats').innerHTML=sh;
+    const types=[...new Set(ALL.map(r=>r.doc_type))].sort();
+    const sel=document.getElementById('ftype');
+    types.forEach(t=>{const o=document.createElement('option');o.value=t;o.textContent=t;sel.appendChild(o)});
+    render();
+  }catch(e){
+    document.getElementById('tbody').innerHTML='<tr><td colspan="9" class="empty">Could not load records.json — run the scraper first.</td></tr>';
+  }
+}
+function filter(){
+  const q=document.getElementById('q').value.toLowerCase();
+  const type=document.getElementById('ftype').value;
+  const cat=document.getElementById('fcat').value;
+  const sc=document.getElementById('fscore').value;
+  return ALL.filter(r=>{
+    if(type&&r.doc_type!==type)return false;
+    if(cat&&r.cat!==cat)return false;
+    if(sc==='high'&&r.score<70)return false;
+    if(sc==='mid'&&(r.score<50||r.score>=70))return false;
+    if(sc==='low'&&r.score>=50)return false;
+    if(q){const h=[r.owner,r.prop_address,r.mail_address,r.doc_num,r.grantee,r.legal].join(' ').toLowerCase();if(!h.includes(q))return false}
+    return true;
+  });
+}
+function render(){
+  const rows=filter();
+  document.getElementById('count').textContent=`Showing ${rows.length} of ${ALL.length} records`;
+  const tb=document.getElementById('tbody');
+  if(!rows.length){tb.innerHTML='';document.getElementById('empty').style.display='block';return}
+  document.getElementById('empty').style.display='none';
+  tb.innerHTML=rows.map(r=>{
+    const sc=r.score>=70?'high':r.score>=50?'mid':'low';
+    const fh=(r.flags||[]).map(f=>{
+      const c=f.includes('pendens')||f.includes('foreclosure')?'red':f.includes('New')?'grn':f.includes('LLC')?'ylw':'';
+      return `<span class="flag ${c}">${f}</span>`;
+    }).join('');
+    const amt=r.amount?`<span class="amt">$${Number(r.amount).toLocaleString()}</span>`:'—';
+    const lnk=r.clerk_url?`<a class="lnk" href="${r.clerk_url}" target="_blank">${r.doc_num||'View'}</a>`:(r.doc_num||'—');
+    const pa=r.prop_address?`${r.prop_address}<div class="sub">${r.prop_city}, ${r.prop_state} ${r.prop_zip}</div>`:'<span style="color:var(--muted)">—</span>';
+    const ma=r.mail_address?`${r.mail_address}<div class="sub">${r.mail_city}, ${r.mail_state} ${r.mail_zip}</div>`:'<span style="color:var(--muted)">—</span>';
+    return `<tr>
+      <td><span class="pill ${sc}">${r.score}</span></td>
+      <td style="white-space:nowrap">${r.filed||'—'}</td>
+      <td><strong>${r.doc_type}</strong><div class="sub">${r.cat_label}</div></td>
+      <td>${r.owner||'—'}</td><td>${pa}</td><td>${ma}</td>
+      <td>${amt}</td><td>${fh||'—'}</td><td>${lnk}</td>
+    </tr>`;
+  }).join('');
+}
+function exportCSV(){
+  const rows=filter();
+  const h=['Score','Doc Type','Category','Filed','Owner','Grantee','Property Address','Property City','Property Zip','Mailing Address','Mailing City','Mailing State','Mailing Zip','Amount','Flags','Doc Number','Clerk URL'];
+  const e=v=>`"${String(v||'').replace(/"/g,'""')}"`;
+  const csv=[h.join(','),...rows.map(r=>[r.score,r.doc_type,r.cat_label,r.filed,r.owner,r.grantee,r.prop_address,r.prop_city,r.prop_zip,r.mail_address,r.mail_city,r.mail_state,r.mail_zip,r.amount||'',(r.flags||[]).join(' | '),r.doc_num,r.clerk_url].map(e).join(','))].join('\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download=`hillsborough_leads_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+}
+['q','ftype','fcat','fscore'].forEach(id=>{
+  document.getElementById(id).addEventListener('input',render);
+  document.getElementById(id).addEventListener('change',render);
+});
+load();
+</script>
+</body>
+</html>
