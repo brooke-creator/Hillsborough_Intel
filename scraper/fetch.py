@@ -1,5 +1,7 @@
 """
-Hillsborough County Motivated Seller Lead Scraper v5
+Hillsborough County Motivated Seller Lead Scraper v6
+Key fix: Document Type is a dropdown — click it, then select the matching option.
+Do NOT type into the name field.
 """
 
 import asyncio
@@ -11,7 +13,6 @@ import re
 from datetime import datetime, timedelta
 from pathlib import Path
 
-import requests
 import urllib3
 from bs4 import BeautifulSoup
 from playwright.async_api import async_playwright, TimeoutError as PWTimeout
@@ -44,6 +45,26 @@ DOC_TYPES = {
     "PRO":      ("probate",      "Probate"),
     "NOC":      ("construction", "Notice of Commencement"),
     "RELLP":    ("release",      "Release Lis Pendens"),
+}
+
+# Full display names as they appear in the dropdown
+DOC_DISPLAY = {
+    "LP":       "LIS PENDENS",
+    "NOFC":     "NOTICE OF",
+    "TAXDEED":  "TAX DEED",
+    "JUD":      "JUDGMENT",
+    "CCJ":      "CERTIFIED JUDGMENT",
+    "DRJUD":    "DOMESTIC",
+    "LNCORPTX": "CORP TAX",
+    "LNIRS":    "IRS LIEN",
+    "LNFED":    "FEDERAL LIEN",
+    "LN":       "LIEN",
+    "LNMECH":   "MECHANIC",
+    "LNHOA":    "HOA",
+    "MEDLN":    "MEDICAID",
+    "PRO":      "PROBATE",
+    "NOC":      "NOTICE OF COMMENCEMENT",
+    "RELLP":    "RELEASE LIS",
 }
 
 OUTPUT_PATHS = [Path("dashboard/records.json"), Path("data/records.json")]
@@ -198,135 +219,145 @@ def _parse_table(html: str, doc_code: str) -> list[dict]:
 
 async def _scrape_one(page, doc_code: str, date_from: str, date_to: str) -> list[dict]:
     results = []
+    display_hint = DOC_DISPLAY.get(doc_code, doc_code)
+
     for attempt in range(1, 4):
         try:
             await page.goto(CLERK_URL, wait_until="domcontentloaded", timeout=60_000)
             await page.wait_for_timeout(3_000)
 
-            # ── Step 1: Click "Document Type" in left Search Types panel ─────
-            # From screenshot we can see it's a plain list item
+            # ── Step 1: Click "Document Type" in LEFT nav ────────────────────
+            # This switches the search mode — it's a list item on the left
             clicked = False
             for selector in [
                 "li:has-text('Document Type')",
                 ".searchTypes li:has-text('Document Type')",
                 "td:has-text('Document Type')",
-                "a:has-text('Document Type')",
                 "text=Document Type",
             ]:
                 try:
                     await page.click(selector, timeout=8_000)
                     await page.wait_for_timeout(2_000)
-                    # Take screenshot after click to verify
-                    await page.screenshot(path=f"data/after_click_{doc_code}.png")
                     clicked = True
-                    log.info("[%s] clicked Document Type nav", doc_code)
+                    log.info("[%s] clicked Document Type in left nav", doc_code)
                     break
                 except Exception:
                     continue
 
             if not clicked:
-                raise Exception("Could not click Document Type in left nav")
+                raise Exception("Could not click Document Type nav item")
 
-            # ── Step 2: Type doc code into Document Type field ───────────────
-            # From screenshot the field says "Optionally, choose one or more document types"
-            filled = False
+            # ── Step 2: Click the Document Type DROPDOWN (the big box) ───────
+            # This is the "Optionally, choose one or more document types" box
+            # It opens a scrollable list of ALL document types
+            dropdown_clicked = False
             for selector in [
                 'input[placeholder*="choose one or more"]',
                 'input[placeholder*="document types"]',
                 'input[placeholder*="Optionally"]',
-                '.chosen-search input',
-                '.select2-search input',
-                'input[type="text"][placeholder]',
-                'input[type="text"]',
+                '.chosen-container',
+                '.select2-container',
+                'div[class*="chosen"]',
+                'div[class*="select2"]',
             ]:
                 try:
                     el = page.locator(selector).first
                     if await el.is_visible(timeout=3_000):
                         await el.click()
-                        await el.press("Control+a")
-                        await el.press("Meta+a")
-                        await el.fill(doc_code)
                         await page.wait_for_timeout(1_000)
-                        filled = True
-                        log.info("[%s] filled doc type field", doc_code)
+                        dropdown_clicked = True
+                        log.info("[%s] opened document type dropdown", doc_code)
                         break
                 except Exception:
                     continue
 
-            if not filled:
-                raise Exception("Could not fill Document Type input")
+            if not dropdown_clicked:
+                raise Exception("Could not open document type dropdown")
 
-            # ── Step 3: Click the matching option ────────────────────────────
+            # Screenshot to see dropdown state
+            await page.screenshot(path=f"data/dropdown_{doc_code}.png")
+
+            # ── Step 3: Find and click the matching option in the dropdown ────
+            # The dropdown shows items like "(LP) LIS PENDENS"
+            # Try clicking by the doc code in parentheses first
+            option_clicked = False
             for selector in [
-                f"li:has-text('{doc_code}')",
-                f".chosen-results li:has-text('{doc_code}')",
-                f".select2-results li:has-text('{doc_code}')",
-                f"option:has-text('{doc_code}')",
+                f"li:has-text('({doc_code})')",
+                f"option:has-text('({doc_code})')",
+                f"li:has-text('({doc_code}) ')",
+                f".chosen-results li:has-text('({doc_code})')",
+                f".select2-results__option:has-text('({doc_code})')",
+                f"li:has-text('{display_hint}')",
             ]:
                 try:
-                    await page.click(selector, timeout=4_000)
-                    log.info("[%s] selected option", doc_code)
+                    await page.click(selector, timeout=5_000)
+                    option_clicked = True
+                    log.info("[%s] selected option from dropdown", doc_code)
                     break
                 except Exception:
                     continue
 
-            await page.wait_for_timeout(500)
-
-            # ── Step 4: Fill date range ───────────────────────────────────────
-            # From screenshot: "Recording Begin Date" and "Recording End Date"
-            begin_filled = end_filled = False
-
-            # Try by placeholder text visible in screenshot
-            for selector in ['input[placeholder*="Begin"], input[id*="begin" i], input[name*="begin" i]']:
-                try:
-                    el = page.locator(selector).first
-                    if await el.is_visible(timeout=2_000):
-                        await el.click()
-                        await el.press("Control+a")
-                        await el.fill(date_from)
-                        begin_filled = True
-                        break
-                except Exception:
-                    pass
-
-            for selector in ['input[placeholder*="End"], input[id*="end" i], input[name*="end" i]']:
-                try:
-                    el = page.locator(selector).first
-                    if await el.is_visible(timeout=2_000):
-                        await el.click()
-                        await el.press("Control+a")
-                        await el.fill(date_to)
-                        end_filled = True
-                        break
-                except Exception:
-                    pass
-
-            # Positional fallback — find all visible date-like inputs
-            if not begin_filled or not end_filled:
-                all_inputs = page.locator('input[type="text"]')
-                n = await all_inputs.count()
-                date_inputs = []
-                for i in range(n):
+            if not option_clicked:
+                # Try typing in the search box inside the dropdown to filter
+                for selector in [
+                    '.chosen-search input',
+                    '.select2-search input',
+                    'input[type="text"]',
+                ]:
                     try:
-                        el = all_inputs.nth(i)
-                        val = await el.input_value(timeout=1_000)
-                        if re.match(r"\d{1,2}/\d{1,2}/\d{4}", val or ""):
-                            date_inputs.append(el)
+                        el = page.locator(selector).first
+                        if await el.is_visible(timeout=2_000):
+                            await el.fill(doc_code)
+                            await page.wait_for_timeout(1_000)
+                            # Now click first visible option
+                            await page.locator(f"li:has-text('({doc_code})')").first.click(timeout=3_000)
+                            option_clicked = True
+                            break
                     except Exception:
                         continue
 
-                if len(date_inputs) >= 1 and not begin_filled:
-                    await date_inputs[0].click()
-                    await date_inputs[0].press("Control+a")
-                    await date_inputs[0].fill(date_from)
-                if len(date_inputs) >= 2 and not end_filled:
-                    await date_inputs[1].click()
-                    await date_inputs[1].press("Control+a")
-                    await date_inputs[1].fill(date_to)
+            if not option_clicked:
+                raise Exception(f"Could not select {doc_code} from dropdown")
+
+            await page.wait_for_timeout(500)
+            await page.screenshot(path=f"data/after_select_{doc_code}.png")
+
+            # ── Step 4: Fill date range ───────────────────────────────────────
+            # Find date inputs by their current value pattern (they have dates pre-filled)
+            all_inputs = page.locator('input[type="text"]')
+            n = await all_inputs.count()
+            log.info("[%s] found %d text inputs", doc_code, n)
+
+            begin_filled = end_filled = False
+            for i in range(n):
+                try:
+                    el  = all_inputs.nth(i)
+                    pid = (await el.get_attribute("id")          or "").lower()
+                    pph = (await el.get_attribute("placeholder") or "").lower()
+                    pnm = (await el.get_attribute("name")        or "").lower()
+                    val = (await el.input_value()                or "")
+                    hint = pid + pph + pnm
+
+                    # Skip the name/search fields — only target date fields
+                    if re.match(r"\d{1,2}/\d{1,2}/\d{4}", val):
+                        if not begin_filled:
+                            await el.click()
+                            await el.press("Control+a")
+                            await el.fill(date_from)
+                            begin_filled = True
+                            log.info("[%s] filled begin date", doc_code)
+                        elif not end_filled:
+                            await el.click()
+                            await el.press("Control+a")
+                            await el.fill(date_to)
+                            end_filled = True
+                            log.info("[%s] filled end date", doc_code)
+                except Exception:
+                    continue
 
             await page.wait_for_timeout(500)
 
-            # ── Step 5: Click Search ──────────────────────────────────────────
+            # ── Step 5: Click Search button ───────────────────────────────────
             for selector in [
                 'input[value="Search"]',
                 'button:has-text("Search")',
@@ -334,17 +365,16 @@ async def _scrape_one(page, doc_code: str, date_from: str, date_to: str) -> list
             ]:
                 try:
                     await page.click(selector, timeout=8_000)
+                    log.info("[%s] clicked Search", doc_code)
                     break
                 except Exception:
                     continue
 
             await page.wait_for_load_state("domcontentloaded", timeout=30_000)
             await page.wait_for_timeout(2_000)
-
-            # Screenshot after search
             await page.screenshot(path=f"data/results_{doc_code}.png")
 
-            # ── Step 6: Collect paginated results ─────────────────────────────
+            # ── Step 6: Collect results ───────────────────────────────────────
             page_num = 1
             while True:
                 html  = await page.content()
@@ -382,7 +412,7 @@ async def main():
     date_to_str   = date_to_dt.strftime("%m/%d/%Y")
 
     log.info("=" * 64)
-    log.info("Hillsborough County Motivated Seller Scraper  v5")
+    log.info("Hillsborough County Motivated Seller Scraper  v6")
     log.info("Range  : %s  →  %s  (%d days)", date_from_str, date_to_str, LOOKBACK_DAYS)
     log.info("=" * 64)
 
@@ -407,11 +437,10 @@ async def main():
             await page.wait_for_timeout(3_000)
             Path("data").mkdir(exist_ok=True)
             await page.screenshot(path="data/portal_screenshot.png", full_page=True)
-            log.info("Portal screenshot saved")
         except Exception as e:
             log.warning("Could not screenshot portal: %s", e)
 
-        # Only scrape LP first to test
+        # Test with first 3 doc types only
         test_types = dict(list(DOC_TYPES.items())[:3])
 
         for doc_code, (cat, cat_label) in test_types.items():
