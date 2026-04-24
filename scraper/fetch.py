@@ -1,7 +1,6 @@
 """
-Hillsborough County Motivated Seller Lead Scraper v14
-Everything works! Just need to parse results correctly.
-LP selects, dates fill, search clicks. Now parse all tables.
+Hillsborough County Motivated Seller Lead Scraper v15
+Fix: Scroll down after search + wait longer for results + better table parsing.
 """
 
 import asyncio
@@ -158,31 +157,21 @@ def _parse_doc_type(raw: str) -> str:
     return m.group(1) if m else raw.strip().upper()
 
 def _parse_html(html: str) -> list[dict]:
-    """Parse ALL tables in the HTML looking for results."""
     records = []
     soup = BeautifulSoup(html, "lxml")
-
-    # Log all tables found
     all_tables = soup.find_all("table")
-    log.info("Found %d tables in HTML", len(all_tables))
-
-    # Log full page text around results area
-    results_div = soup.find("div", class_=re.compile(r"search-result|result|jsgrid", re.I))
-    if results_div:
-        log.info("Results div found: class=%s", results_div.get("class"))
+    log.info("Found %d tables", len(all_tables))
 
     for table_idx, table in enumerate(all_tables):
         rows = table.find_all("tr")
-        if len(rows) < 2:
-            continue
-
+        if len(rows) < 2: continue
         headers = [th.get_text(" ", strip=True).upper() for th in rows[0].find_all(["th","td"])]
-        log.info("Table %d headers: %s", table_idx, headers)
+        log.info("Table %d: %d rows, headers: %s", table_idx, len(rows), headers[:8])
 
-        # Skip tables that don't look like results
-        has_useful = any(h for h in headers if any(k in h for k in ["NAME","DOC","INST","DATE","LEGAL","TYPE"]))
-        if not has_useful:
-            continue
+        # Must have NAME or DOC TYPE column to be a results table
+        has_name = any("NAME" in h for h in headers)
+        has_doc  = any("DOC" in h or "TYPE" in h for h in headers)
+        if not has_name and not has_doc: continue
 
         def col(cells, *names):
             for name in names:
@@ -192,6 +181,7 @@ def _parse_html(html: str) -> list[dict]:
                         if t: return t
             return ""
 
+        table_records = []
         for row in rows[1:]:
             cells = row.find_all("td")
             if not cells: continue
@@ -202,18 +192,17 @@ def _parse_html(html: str) -> list[dict]:
                     href = link_tag["href"]
                     clerk_url = href if href.startswith("http") else "https://publicaccess.hillsclerk.com" + href
 
-                doc_type_raw = col(cells, "DOC TYPE","TYPE","DOCUMENT TYPE")
+                doc_type_raw = col(cells, "DOC TYPE","TYPE","DOCUMENT TYPE","DOCTYPE")
                 doc_code     = _parse_doc_type(doc_type_raw)
-                doc_num  = col(cells, "INST #","INST","INSTRUMENT","DOC #") or (link_tag.get_text(strip=True) if link_tag else "")
-                filed    = col(cells, "RECORDING DATE","RECORD DATE","DATE","FILED")
+                doc_num  = col(cells, "INSTRUMENT #","INST #","INST","INSTRUMENT","DOC #") or (link_tag.get_text(strip=True) if link_tag else "")
+                filed    = col(cells, "RECORDING DATE","RECORD DATE","DATE RECORDED","DATE","FILED")
                 grantor  = col(cells, "NAME","GRANTOR","PARTY 1","OWNER")
-                grantee  = col(cells, "CROSS-PARTY","CROSS PARTY","GRANTEE","PARTY 2")
+                grantee  = col(cells, "CROSS-PARTY NAME","CROSS PARTY","CROSS-PARTY","GRANTEE","PARTY 2")
                 legal    = col(cells, "LEGAL DESCRIPTION","LEGAL","DESCRIPTION")
 
-                if not doc_num and not grantor:
-                    continue
+                if not grantor and not doc_num: continue
 
-                records.append({
+                table_records.append({
                     "doc_num":   doc_num,
                     "doc_type":  doc_code,
                     "filed":     _norm_date(filed),
@@ -223,18 +212,22 @@ def _parse_html(html: str) -> list[dict]:
                     "legal":     legal,
                     "clerk_url": clerk_url,
                 })
-            except Exception:
-                continue
+            except Exception: continue
 
-        if records:
-            log.info("Table %d yielded %d records", table_idx, len(records))
+        if table_records:
+            log.info("Table %d yielded %d records", table_idx, len(table_records))
+            records.extend(table_records)
             break
 
-    # If no tables worked, log the full HTML for debugging
     if not records:
-        log.warning("No records from tables — logging page text snippet")
-        text = soup.get_text()[:2000]
-        log.info("Page text: %s", text)
+        # Log page text to debug
+        text = soup.get_text(" ", strip=True)
+        # Look for "Performed a" text which appears above results
+        if "Performed a" in text:
+            log.info("Search was performed — results text found in page")
+        else:
+            log.warning("No 'Performed a' text found — search may not have run")
+        log.info("Page text snippet: %s", text[500:1500])
 
     return records
 
@@ -246,12 +239,12 @@ async def scrape_one_doc_type(page, doc_code: str, date_from: str, date_to: str)
             await page.goto(CLERK_URL, wait_until="domcontentloaded", timeout=60_000)
             await page.wait_for_timeout(3_000)
 
-            # Click Document Type nav using exact ID
+            # Click Document Type nav
             await page.click('#ORI-Document\\ Type', timeout=10_000)
             await page.wait_for_timeout(2_000)
             log.info("[%s] clicked Document Type nav", doc_code)
 
-            # Select doc type via JavaScript + jQuery
+            # Select doc type via JS + jQuery
             selected = await page.evaluate(f"""
                 () => {{
                     const sel = document.querySelector('select.doc-type, select.for-chosen, select[class*="doc-type"], select[id*="OBKey"]');
@@ -276,7 +269,7 @@ async def scrape_one_doc_type(page, doc_code: str, date_from: str, date_to: str)
             log.info("[%s] JS: %s", doc_code, selected)
             await page.wait_for_timeout(2_000)
 
-            # Fill date fields by class name (from inspection: record-begin, record-end)
+            # Fill dates using class names from inspection
             begin_filled = end_filled = False
             all_inputs = page.locator('input[type="text"]')
             n = await all_inputs.count()
@@ -284,17 +277,18 @@ async def scrape_one_doc_type(page, doc_code: str, date_from: str, date_to: str)
                 try:
                     el  = all_inputs.nth(i)
                     cls = (await el.get_attribute("class") or "").lower()
-                    val = (await el.input_value() or "")
                     if "record-begin" in cls:
                         await el.click()
                         await el.press("Control+a")
                         await el.fill(date_from)
                         begin_filled = True
+                        log.info("[%s] filled begin date via class", doc_code)
                     elif "record-end" in cls:
                         await el.click()
                         await el.press("Control+a")
                         await el.fill(date_to)
                         end_filled = True
+                        log.info("[%s] filled end date via class", doc_code)
                 except Exception: continue
 
             # Positional fallback
@@ -319,7 +313,7 @@ async def scrape_one_doc_type(page, doc_code: str, date_from: str, date_to: str)
             log.info("[%s] dates: begin=%s end=%s", doc_code, begin_filled, end_filled)
             await page.wait_for_timeout(500)
 
-            # Click Search
+            # Click Search button
             for selector in ['input[value="Search"]', 'button:has-text("Search")', 'input[type="submit"]']:
                 try:
                     await page.click(selector, timeout=8_000)
@@ -327,13 +321,19 @@ async def scrape_one_doc_type(page, doc_code: str, date_from: str, date_to: str)
                     break
                 except Exception: continue
 
+            # Wait for results to load
             await page.wait_for_load_state("domcontentloaded", timeout=30_000)
-            await page.wait_for_timeout(3_000)
+            await page.wait_for_timeout(4_000)
 
-            # Take full page screenshot
+            # Scroll down to load results
+            await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+            await page.wait_for_timeout(2_000)
+
+            # Full page screenshot
             await page.screenshot(path=f"data/results_{doc_code}.png", full_page=True)
+            log.info("[%s] screenshot saved", doc_code)
 
-            # Parse results — paginate through all pages
+            # Parse results pages
             page_num = 1
             while True:
                 html  = await page.content()
@@ -351,7 +351,7 @@ async def scrape_one_doc_type(page, doc_code: str, date_from: str, date_to: str)
                     page_num += 1
                 except Exception: break
 
-            log.info("[%s] DONE: %d total records", doc_code, len(results))
+            log.info("[%s] DONE: %d records", doc_code, len(results))
             return results
 
         except PWTimeout:
@@ -369,7 +369,7 @@ async def main():
     date_to_str   = date_to_dt.strftime("%m/%d/%Y")
 
     log.info("=" * 64)
-    log.info("Hillsborough County Motivated Seller Scraper  v14")
+    log.info("Hillsborough County Motivated Seller Scraper  v15")
     log.info("Range  : %s  →  %s  (%d days)", date_from_str, date_to_str, LOOKBACK_DAYS)
     log.info("=" * 64)
 
