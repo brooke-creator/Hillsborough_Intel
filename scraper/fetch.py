@@ -1,6 +1,6 @@
 """
-Hillsborough County Motivated Seller Lead Scraper v17
-Fix: Close calendar popup before clicking Search.
+Hillsborough County Motivated Seller Lead Scraper v18 - FINAL
+All 16 document types. Runs daily via GitHub Actions.
 """
 
 import asyncio
@@ -160,13 +160,11 @@ def _parse_html(html: str) -> list[dict]:
     records = []
     soup = BeautifulSoup(html, "lxml")
     all_tables = soup.find_all("table")
-    log.info("Found %d tables", len(all_tables))
 
     for table_idx, table in enumerate(all_tables):
         rows = table.find_all("tr")
         if len(rows) < 2: continue
         headers = [th.get_text(" ", strip=True).upper() for th in rows[0].find_all(["th","td"])]
-        log.info("Table %d: %d rows headers: %s", table_idx, len(rows), headers[:8])
 
         has_name = any("NAME" in h for h in headers)
         has_doc  = any("DOC" in h or "TYPE" in h for h in headers)
@@ -209,18 +207,8 @@ def _parse_html(html: str) -> list[dict]:
             except Exception: continue
 
         if table_records:
-            log.info("Table %d yielded %d records", table_idx, len(table_records))
             records.extend(table_records)
             break
-
-    if not records:
-        text = soup.get_text(" ", strip=True)
-        if "Performed a" in text:
-            log.info("Search ran! Logging all table HTML for debugging")
-            for i, t in enumerate(all_tables):
-                log.info("TABLE %d HTML: %s", i, str(t)[:800])
-        else:
-            log.warning("Search did not run")
 
     return records
 
@@ -235,7 +223,6 @@ async def scrape_one_doc_type(page, doc_code: str, date_from: str, date_to: str)
             # Click Document Type nav
             await page.click('#ORI-Document\\ Type', timeout=10_000)
             await page.wait_for_timeout(2_000)
-            log.info("[%s] clicked Document Type nav", doc_code)
 
             # Select via JS + jQuery
             selected = await page.evaluate(f"""
@@ -259,70 +246,52 @@ async def scrape_one_doc_type(page, doc_code: str, date_from: str, date_to: str)
                     return 'selected: ' + found.text;
                 }}
             """)
-            log.info("[%s] JS: %s", doc_code, selected)
+            log.info("[%s] %s", doc_code, selected)
             await page.wait_for_timeout(1_000)
 
-            # Close dropdown with Escape
+            # Close dropdown
             await page.keyboard.press("Escape")
             await page.wait_for_timeout(500)
-            log.info("[%s] closed dropdown", doc_code)
 
-            # Fill dates using JS to avoid triggering calendar popup
-            filled = await page.evaluate(f"""
+            # Fill dates via JS to avoid calendar popup
+            await page.evaluate(f"""
                 () => {{
-                    const inputs = document.querySelectorAll('input.record-begin, input[class*="record-begin"]');
-                    const inputs2 = document.querySelectorAll('input.record-end, input[class*="record-end"]');
-                    let result = '';
-                    if (inputs.length > 0) {{
-                        inputs[0].value = '{date_from}';
-                        inputs[0].dispatchEvent(new Event('change', {{bubbles: true}}));
-                        inputs[0].dispatchEvent(new Event('input', {{bubbles: true}}));
-                        result += 'begin filled ';
+                    const begins = document.querySelectorAll('input.record-begin, input[class*="record-begin"]');
+                    const ends   = document.querySelectorAll('input.record-end, input[class*="record-end"]');
+                    if (begins.length > 0) {{
+                        begins[0].value = '{date_from}';
+                        begins[0].dispatchEvent(new Event('change', {{bubbles: true}}));
                     }}
-                    if (inputs2.length > 0) {{
-                        inputs2[0].value = '{date_to}';
-                        inputs2[0].dispatchEvent(new Event('change', {{bubbles: true}}));
-                        inputs2[0].dispatchEvent(new Event('input', {{bubbles: true}}));
-                        result += 'end filled';
+                    if (ends.length > 0) {{
+                        ends[0].value = '{date_to}';
+                        ends[0].dispatchEvent(new Event('change', {{bubbles: true}}));
                     }}
-                    return result || 'no date fields found';
                 }}
             """)
-            log.info("[%s] JS date fill: %s", doc_code, filled)
             await page.wait_for_timeout(500)
 
-            # Close any calendar that may have opened
-            await page.keyboard.press("Escape")
-            await page.wait_for_timeout(300)
+            # Close any calendar
             await page.keyboard.press("Escape")
             await page.wait_for_timeout(300)
 
-            # Screenshot before search
-            await page.screenshot(path=f"data/before_search_{doc_code}.png")
-
-            # Click Search using JavaScript to avoid any popup interference
+            # Click Search via JS
             await page.evaluate("""
                 () => {
                     const btns = document.querySelectorAll('input[value="Search"], button');
                     for (const btn of btns) {
                         if (btn.value === 'Search' || btn.textContent.trim() === 'Search') {
                             btn.click();
-                            return 'clicked: ' + (btn.value || btn.textContent);
+                            return;
                         }
                     }
-                    return 'no search button found';
                 }
             """)
-            log.info("[%s] clicked Search via JS", doc_code)
+            log.info("[%s] clicked Search", doc_code)
 
             await page.wait_for_load_state("domcontentloaded", timeout=30_000)
             await page.wait_for_timeout(4_000)
 
-            # Full page screenshot
-            await page.screenshot(path=f"data/results_{doc_code}.png", full_page=True)
-            log.info("[%s] screenshot saved", doc_code)
-
-            # Parse results
+            # Parse all pages
             page_num = 1
             while True:
                 html  = await page.content()
@@ -358,7 +327,7 @@ async def main():
     date_to_str   = date_to_dt.strftime("%m/%d/%Y")
 
     log.info("=" * 64)
-    log.info("Hillsborough County Motivated Seller Scraper  v17")
+    log.info("Hillsborough County Motivated Seller Scraper  v18 FINAL")
     log.info("Range  : %s  →  %s  (%d days)", date_from_str, date_to_str, LOOKBACK_DAYS)
     log.info("=" * 64)
 
@@ -379,10 +348,8 @@ async def main():
         page = await ctx.new_page()
         Path("data").mkdir(exist_ok=True)
 
-        # Test LP only
-        test_types = {"LP": ("foreclosure", "Lis Pendens")}
-
-        for doc_code, (cat, cat_label) in test_types.items():
+        # ALL 16 document types
+        for doc_code, (cat, cat_label) in DOC_TYPE_MAP.items():
             log.info("── Fetching [%s] %s", doc_code, cat_label)
             raw = await scrape_one_doc_type(page, doc_code, date_from_str, date_to_str)
             for r in raw:
