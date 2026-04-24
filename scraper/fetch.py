@@ -1,6 +1,6 @@
 """
-Hillsborough County Motivated Seller Lead Scraper v8
-Fix: Type LP into the search box INSIDE the dropdown to filter the list.
+Hillsborough County Motivated Seller Lead Scraper v9
+Strategy: Click DATE in left nav, set date range, get ALL docs, filter by type in code.
 """
 
 import asyncio
@@ -27,7 +27,13 @@ except ImportError:
 CLERK_URL     = "https://publicaccess.hillsclerk.com/oripublicaccess/"
 LOOKBACK_DAYS = int(os.getenv("LOOKBACK_DAYS", "7"))
 
-DOC_TYPES = {
+TARGET_TYPES = {
+    "LP","NOFC","TAXDEED","JUD","CCJ","DRJUD",
+    "LNCORPTX","LNIRS","LNFED","LN","LNMECH",
+    "LNHOA","MEDLN","PRO","NOC","RELLP"
+}
+
+DOC_TYPE_MAP = {
     "LP":       ("foreclosure",  "Lis Pendens"),
     "NOFC":     ("foreclosure",  "Notice of Foreclosure"),
     "TAXDEED":  ("tax",          "Tax Deed"),
@@ -146,7 +152,7 @@ def score_record(rec: dict):
     if rec.get("prop_address"): s += 5
     return min(s, 100), flags
 
-def _parse_table(html: str, doc_code: str) -> list[dict]:
+def _parse_table(html: str) -> list[dict]:
     records = []
     soup = BeautifulSoup(html, "lxml")
     table = (
@@ -174,12 +180,13 @@ def _parse_table(html: str, doc_code: str) -> list[dict]:
             if link_tag:
                 href = link_tag["href"]
                 clerk_url = href if href.startswith("http") else "https://publicaccess.hillsclerk.com" + href
-            doc_num = col(cells, "instrument","doc","number","rec","book") or (link_tag.get_text(strip=True) if link_tag else "")
-            filed   = col(cells, "record date","date","filed","recorded")
-            grantor = col(cells, "grantor","party 1","name","owner","from")
-            grantee = col(cells, "grantee","party 2","to","lender","plaintiff")
-            legal   = col(cells, "legal","description")
-            amt_raw = col(cells, "amount","consideration","debt","value")
+            doc_type = col(cells, "type","doc type","instrument type").upper().strip()
+            doc_num  = col(cells, "instrument","doc","number","rec","book") or (link_tag.get_text(strip=True) if link_tag else "")
+            filed    = col(cells, "record date","date","filed","recorded")
+            grantor  = col(cells, "grantor","party 1","name","owner","from")
+            grantee  = col(cells, "grantee","party 2","to","lender","plaintiff")
+            legal    = col(cells, "legal","description")
+            amt_raw  = col(cells, "amount","consideration","debt","value")
             amount = None
             if amt_raw:
                 clean = re.sub(r"[^\d.]", "", amt_raw)
@@ -187,7 +194,7 @@ def _parse_table(html: str, doc_code: str) -> list[dict]:
                 except Exception: pass
             if not doc_num and not grantor: continue
             records.append({
-                "doc_num": doc_num, "doc_type": doc_code,
+                "doc_num": doc_num, "doc_type": doc_type,
                 "filed": _norm_date(filed), "owner": grantor,
                 "grantee": grantee, "amount": amount,
                 "legal": legal, "clerk_url": clerk_url,
@@ -196,144 +203,94 @@ def _parse_table(html: str, doc_code: str) -> list[dict]:
     return records
 
 
-async def _scrape_one(page, doc_code: str, date_from: str, date_to: str) -> list[dict]:
+async def scrape_by_date(page, date_from: str, date_to: str) -> list[dict]:
     results = []
-
     for attempt in range(1, 4):
         try:
             await page.goto(CLERK_URL, wait_until="domcontentloaded", timeout=60_000)
             await page.wait_for_timeout(3_000)
 
-            # ── Step 1: Click "Document Type" in left nav ────────────────────
+            # Screenshot before anything
+            await page.screenshot(path="data/step1_before_click.png")
+
+            # Click "Date" in left nav
+            log.info("Clicking Date in left nav...")
             clicked = False
             for selector in [
-                "li:has-text('Document Type')",
-                ".searchTypes li:has-text('Document Type')",
-                "td:has-text('Document Type')",
-                "text=Document Type",
+                "li:has-text('Date')",
+                "text=Date",
+                "a:has-text('Date')",
+                "td:has-text('Date')",
             ]:
                 try:
-                    await page.click(selector, timeout=8_000)
-                    await page.wait_for_timeout(2_000)
-                    clicked = True
-                    log.info("[%s] clicked Document Type in left nav", doc_code)
-                    break
+                    # Make sure we click the exact "Date" item not something containing "Date"
+                    locator = page.locator(selector).first
+                    text = await locator.inner_text()
+                    if text.strip() == "Date":
+                        await locator.click(timeout=8_000)
+                        clicked = True
+                        log.info("Clicked Date nav item")
+                        break
                 except Exception:
                     continue
 
             if not clicked:
-                raise Exception("Could not click Document Type nav item")
+                # Try clicking by position in the list
+                items = page.locator(".searchTypes li, #searchTypes li")
+                count = await items.count()
+                for i in range(count):
+                    try:
+                        item = items.nth(i)
+                        text = await item.inner_text()
+                        if text.strip() == "Date":
+                            await item.click()
+                            clicked = True
+                            log.info("Clicked Date via list position %d", i)
+                            break
+                    except Exception:
+                        continue
 
-            # ── Step 2: Click the Document Type input to open dropdown ────────
-            await page.press("Escape")
-            await page.wait_for_timeout(500)
+            if not clicked:
+                raise Exception("Could not click Date in left nav")
 
-            doc_field_clicked = False
-            for selector in [
-                'input[placeholder="Optionally, choose one or more document types"]',
-                'input[placeholder*="choose one or more document"]',
-                'input[placeholder*="Optionally, choose"]',
-            ]:
-                try:
-                    el = page.locator(selector).first
-                    if await el.is_visible(timeout=5_000):
-                        await el.click()
-                        await page.wait_for_timeout(1_500)
-                        doc_field_clicked = True
-                        log.info("[%s] opened document type dropdown", doc_code)
-                        break
-                except Exception:
-                    continue
+            await page.wait_for_timeout(2_000)
+            await page.screenshot(path="data/step2_after_date_click.png")
 
-            if not doc_field_clicked:
-                raise Exception("Could not open document type dropdown")
-
-            await page.screenshot(path=f"data/step2_{doc_code}.png")
-
-            # ── Step 3: Type into the SEARCH BOX inside the dropdown ──────────
-            # The dropdown has a small search input at the top
-            # We type the doc code to filter the list
-            typed = False
-            for selector in [
-                '.chosen-search input',
-                '.chosen-search-input',
-                '.select2-search__field',
-                '.select2-search input',
-                'input.select2-search__field',
-            ]:
-                try:
-                    el = page.locator(selector).first
-                    if await el.is_visible(timeout=3_000):
-                        await el.fill(doc_code)
-                        await page.wait_for_timeout(1_500)
-                        typed = True
-                        log.info("[%s] typed into dropdown search box via %s", doc_code, selector)
-                        break
-                except Exception:
-                    continue
-
-            if not typed:
-                # Fallback: just type with keyboard since dropdown is open
-                await page.keyboard.type(doc_code, delay=100)
-                await page.wait_for_timeout(1_500)
-                log.info("[%s] typed with keyboard fallback", doc_code)
-
-            await page.screenshot(path=f"data/step3_{doc_code}.png")
-
-            # ── Step 4: Click the matching option ────────────────────────────
-            option_clicked = False
-            for selector in [
-                f"li:has-text('({doc_code})')",
-                f".chosen-results li:has-text('({doc_code})')",
-                f".select2-results__option:has-text('({doc_code})')",
-                f"li:has-text('({doc_code}) ')",
-            ]:
-                try:
-                    el = page.locator(selector).first
-                    if await el.is_visible(timeout=3_000):
-                        await el.click()
-                        option_clicked = True
-                        log.info("[%s] clicked option", doc_code)
-                        break
-                except Exception:
-                    continue
-
-            if not option_clicked:
-                await page.keyboard.press("Enter")
-                log.info("[%s] pressed Enter to select", doc_code)
-
-            await page.wait_for_timeout(500)
-            await page.screenshot(path=f"data/step4_{doc_code}.png")
-
-            # ── Step 5: Fill date fields ──────────────────────────────────────
+            # Fill the begin date field
+            log.info("Filling dates...")
             all_inputs = page.locator('input[type="text"]')
             n = await all_inputs.count()
-            begin_filled = end_filled = False
+            log.info("Found %d text inputs", n)
 
+            begin_filled = end_filled = False
             for i in range(n):
                 try:
                     el  = all_inputs.nth(i)
                     val = (await el.input_value() or "")
+                    pid = (await el.get_attribute("id") or "").lower()
+                    log.info("Input %d: id=%s val=%s", i, pid, val)
                     if re.match(r"\d{1,2}/\d{1,2}/\d{4}", val):
                         if not begin_filled:
                             await el.click()
                             await el.press("Control+a")
                             await el.fill(date_from)
                             begin_filled = True
-                            log.info("[%s] filled begin date", doc_code)
+                            log.info("Filled begin date: %s", date_from)
                         elif not end_filled:
                             await el.click()
                             await el.press("Control+a")
                             await el.fill(date_to)
                             end_filled = True
-                            log.info("[%s] filled end date", doc_code)
-                except Exception:
+                            log.info("Filled end date: %s", date_to)
+                except Exception as e:
+                    log.debug("Input %d error: %s", i, e)
                     continue
 
             await page.wait_for_timeout(500)
-            await page.screenshot(path=f"data/step5_{doc_code}.png")
+            await page.screenshot(path="data/step3_dates_filled.png")
 
-            # ── Step 6: Click Search ──────────────────────────────────────────
+            # Click Search
+            log.info("Clicking Search...")
             for selector in [
                 'input[value="Search"]',
                 'button:has-text("Search")',
@@ -341,22 +298,22 @@ async def _scrape_one(page, doc_code: str, date_from: str, date_to: str) -> list
             ]:
                 try:
                     await page.click(selector, timeout=8_000)
-                    log.info("[%s] clicked Search", doc_code)
+                    log.info("Clicked Search")
                     break
                 except Exception:
                     continue
 
             await page.wait_for_load_state("domcontentloaded", timeout=30_000)
             await page.wait_for_timeout(2_000)
-            await page.screenshot(path=f"data/results_{doc_code}.png")
+            await page.screenshot(path="data/step4_results.png")
 
-            # ── Step 7: Collect results ───────────────────────────────────────
+            # Collect all pages
             page_num = 1
             while True:
                 html  = await page.content()
-                rows  = _parse_table(html, doc_code)
+                rows  = _parse_table(html)
                 results.extend(rows)
-                log.info("[%s] page %d → %d rows (total: %d)", doc_code, page_num, len(rows), len(results))
+                log.info("Page %d: %d rows (total: %d)", page_num, len(rows), len(results))
                 soup      = BeautifulSoup(html, "lxml")
                 next_link = soup.find("a", string=re.compile(r"^\s*(Next|>>)\s*$", re.I))
                 if not next_link: break
@@ -368,17 +325,16 @@ async def _scrape_one(page, doc_code: str, date_from: str, date_to: str) -> list
                 except Exception:
                     break
 
-            log.info("[%s] DONE — %d records", doc_code, len(results))
+            log.info("Total raw records: %d", len(results))
             return results
 
         except PWTimeout:
-            log.warning("[%s] timeout — attempt %d/3", doc_code, attempt)
+            log.warning("Timeout attempt %d/3", attempt)
         except Exception as exc:
-            log.warning("[%s] error attempt %d: %s", doc_code, attempt, exc)
+            log.warning("Error attempt %d: %s", attempt, exc)
         await asyncio.sleep(3)
 
-    log.warning("[%s] all attempts failed — 0 records", doc_code)
-    return []
+    return results
 
 
 async def main():
@@ -388,7 +344,7 @@ async def main():
     date_to_str   = date_to_dt.strftime("%m/%d/%Y")
 
     log.info("=" * 64)
-    log.info("Hillsborough County Motivated Seller Scraper  v8")
+    log.info("Hillsborough County Motivated Seller Scraper  v9")
     log.info("Range  : %s  →  %s  (%d days)", date_from_str, date_to_str, LOOKBACK_DAYS)
     log.info("=" * 64)
 
@@ -407,41 +363,39 @@ async def main():
         )
         page = await ctx.new_page()
 
-        try:
-            await page.goto(CLERK_URL, wait_until="domcontentloaded", timeout=60_000)
-            await page.wait_for_timeout(3_000)
-            Path("data").mkdir(exist_ok=True)
-            await page.screenshot(path="data/portal_screenshot.png", full_page=True)
-        except Exception as e:
-            log.warning("Could not screenshot portal: %s", e)
+        Path("data").mkdir(exist_ok=True)
 
-        # Test LP only
-        test_types = {"LP": DOC_TYPES["LP"]}
-
-        for doc_code, (cat, cat_label) in test_types.items():
-            log.info("── Fetching [%s] %s", doc_code, cat_label)
-            raw = await _scrape_one(page, doc_code, date_from_str, date_to_str)
-            for r in raw:
-                parcel = match_parcel(r.get("owner",""), parcel_lookup)
-                score, flags = score_record({**r, "cat": cat, **parcel})
-                all_records.append({
-                    "doc_num": r.get("doc_num",""), "doc_type": doc_code,
-                    "filed": r.get("filed",""), "cat": cat, "cat_label": cat_label,
-                    "owner": r.get("owner",""), "grantee": r.get("grantee",""),
-                    "amount": r.get("amount"), "legal": r.get("legal",""),
-                    "prop_address": parcel.get("prop_address",""),
-                    "prop_city": parcel.get("prop_city",""),
-                    "prop_state": "FL",
-                    "prop_zip": parcel.get("prop_zip",""),
-                    "mail_address": parcel.get("mail_address",""),
-                    "mail_city": parcel.get("mail_city",""),
-                    "mail_state": parcel.get("mail_state","FL"),
-                    "mail_zip": parcel.get("mail_zip",""),
-                    "clerk_url": r.get("clerk_url",""),
-                    "flags": flags, "score": score,
-                })
-
+        raw_rows = await scrape_by_date(page, date_from_str, date_to_str)
         await browser.close()
+
+    # Filter to only our target doc types
+    for r in raw_rows:
+        doc_type = r.get("doc_type", "").upper().strip()
+        # Extract just the code if format is "(LP) LIS PENDENS"
+        match = re.match(r"\(([A-Z]+)\)", doc_type)
+        if match:
+            doc_type = match.group(1)
+        if doc_type not in TARGET_TYPES:
+            continue
+        cat, cat_label = DOC_TYPE_MAP.get(doc_type, ("other", doc_type))
+        parcel = match_parcel(r.get("owner",""), parcel_lookup)
+        score, flags = score_record({**r, "doc_type": doc_type, "cat": cat, **parcel})
+        all_records.append({
+            "doc_num": r.get("doc_num",""), "doc_type": doc_type,
+            "filed": r.get("filed",""), "cat": cat, "cat_label": cat_label,
+            "owner": r.get("owner",""), "grantee": r.get("grantee",""),
+            "amount": r.get("amount"), "legal": r.get("legal",""),
+            "prop_address": parcel.get("prop_address",""),
+            "prop_city": parcel.get("prop_city",""),
+            "prop_state": "FL",
+            "prop_zip": parcel.get("prop_zip",""),
+            "mail_address": parcel.get("mail_address",""),
+            "mail_city": parcel.get("mail_city",""),
+            "mail_state": parcel.get("mail_state","FL"),
+            "mail_zip": parcel.get("mail_zip",""),
+            "clerk_url": r.get("clerk_url",""),
+            "flags": flags, "score": score,
+        })
 
     all_records.sort(key=lambda x: x["score"], reverse=True)
     with_addr = sum(1 for r in all_records if r.get("prop_address"))
