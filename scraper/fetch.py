@@ -1,6 +1,6 @@
 """
-Hillsborough County Motivated Seller Lead Scraper v16
-Fix: Close dropdown before clicking Search.
+Hillsborough County Motivated Seller Lead Scraper v17
+Fix: Close calendar popup before clicking Search.
 """
 
 import asyncio
@@ -216,15 +216,9 @@ def _parse_html(html: str) -> list[dict]:
     if not records:
         text = soup.get_text(" ", strip=True)
         if "Performed a" in text:
-            log.info("Search ran but table parse failed — logging HTML snippet")
-            # Find the results section
-            results_section = soup.find("div", class_=re.compile(r"search-result|jsgrid|result", re.I))
-            if results_section:
-                log.info("Results section HTML: %s", str(results_section)[:1000])
-            else:
-                log.info("No results div found — full table HTML:")
-                for t in soup.find_all("table")[:3]:
-                    log.info("TABLE: %s", str(t)[:500])
+            log.info("Search ran! Logging all table HTML for debugging")
+            for i, t in enumerate(all_tables):
+                log.info("TABLE %d HTML: %s", i, str(t)[:800])
         else:
             log.warning("Search did not run")
 
@@ -268,83 +262,67 @@ async def scrape_one_doc_type(page, doc_code: str, date_from: str, date_to: str)
             log.info("[%s] JS: %s", doc_code, selected)
             await page.wait_for_timeout(1_000)
 
-            # ── CRITICAL: Close the dropdown before doing anything else ───────
+            # Close dropdown with Escape
             await page.keyboard.press("Escape")
-            await page.wait_for_timeout(500)
-            await page.click("body")
             await page.wait_for_timeout(500)
             log.info("[%s] closed dropdown", doc_code)
 
-            # Screenshot to verify LP is selected and dropdown is closed
-            await page.screenshot(path=f"data/after_select_{doc_code}.png")
-
-            # Fill dates using class names
-            begin_filled = end_filled = False
-            all_inputs = page.locator('input[type="text"]')
-            n = await all_inputs.count()
-            for i in range(n):
-                try:
-                    el  = all_inputs.nth(i)
-                    cls = (await el.get_attribute("class") or "").lower()
-                    if "record-begin" in cls:
-                        await el.click()
-                        await el.press("Control+a")
-                        await el.fill(date_from)
-                        begin_filled = True
-                        log.info("[%s] filled begin date", doc_code)
-                    elif "record-end" in cls:
-                        await el.click()
-                        await el.press("Control+a")
-                        await el.fill(date_to)
-                        end_filled = True
-                        log.info("[%s] filled end date", doc_code)
-                except Exception: continue
-
-            # Positional fallback
-            if not begin_filled or not end_filled:
-                for i in range(n):
-                    try:
-                        el  = all_inputs.nth(i)
-                        val = (await el.input_value() or "")
-                        if re.match(r"\d{1,2}/\d{1,2}/\d{4}", val):
-                            if not begin_filled:
-                                await el.click()
-                                await el.press("Control+a")
-                                await el.fill(date_from)
-                                begin_filled = True
-                            elif not end_filled:
-                                await el.click()
-                                await el.press("Control+a")
-                                await el.fill(date_to)
-                                end_filled = True
-                    except Exception: continue
-
-            log.info("[%s] dates: begin=%s end=%s", doc_code, begin_filled, end_filled)
+            # Fill dates using JS to avoid triggering calendar popup
+            filled = await page.evaluate(f"""
+                () => {{
+                    const inputs = document.querySelectorAll('input.record-begin, input[class*="record-begin"]');
+                    const inputs2 = document.querySelectorAll('input.record-end, input[class*="record-end"]');
+                    let result = '';
+                    if (inputs.length > 0) {{
+                        inputs[0].value = '{date_from}';
+                        inputs[0].dispatchEvent(new Event('change', {{bubbles: true}}));
+                        inputs[0].dispatchEvent(new Event('input', {{bubbles: true}}));
+                        result += 'begin filled ';
+                    }}
+                    if (inputs2.length > 0) {{
+                        inputs2[0].value = '{date_to}';
+                        inputs2[0].dispatchEvent(new Event('change', {{bubbles: true}}));
+                        inputs2[0].dispatchEvent(new Event('input', {{bubbles: true}}));
+                        result += 'end filled';
+                    }}
+                    return result || 'no date fields found';
+                }}
+            """)
+            log.info("[%s] JS date fill: %s", doc_code, filled)
             await page.wait_for_timeout(500)
+
+            # Close any calendar that may have opened
+            await page.keyboard.press("Escape")
+            await page.wait_for_timeout(300)
+            await page.keyboard.press("Escape")
+            await page.wait_for_timeout(300)
 
             # Screenshot before search
             await page.screenshot(path=f"data/before_search_{doc_code}.png")
 
-            # Click Search
-            for selector in ['input[value="Search"]', 'button:has-text("Search")', 'input[type="submit"]']:
-                try:
-                    await page.click(selector, timeout=8_000)
-                    log.info("[%s] clicked Search", doc_code)
-                    break
-                except Exception: continue
+            # Click Search using JavaScript to avoid any popup interference
+            await page.evaluate("""
+                () => {
+                    const btns = document.querySelectorAll('input[value="Search"], button');
+                    for (const btn of btns) {
+                        if (btn.value === 'Search' || btn.textContent.trim() === 'Search') {
+                            btn.click();
+                            return 'clicked: ' + (btn.value || btn.textContent);
+                        }
+                    }
+                    return 'no search button found';
+                }
+            """)
+            log.info("[%s] clicked Search via JS", doc_code)
 
             await page.wait_for_load_state("domcontentloaded", timeout=30_000)
             await page.wait_for_timeout(4_000)
-
-            # Scroll to middle where results appear
-            await page.evaluate("window.scrollTo(0, 800)")
-            await page.wait_for_timeout(1_000)
 
             # Full page screenshot
             await page.screenshot(path=f"data/results_{doc_code}.png", full_page=True)
             log.info("[%s] screenshot saved", doc_code)
 
-            # Parse all pages
+            # Parse results
             page_num = 1
             while True:
                 html  = await page.content()
@@ -380,7 +358,7 @@ async def main():
     date_to_str   = date_to_dt.strftime("%m/%d/%Y")
 
     log.info("=" * 64)
-    log.info("Hillsborough County Motivated Seller Scraper  v16")
+    log.info("Hillsborough County Motivated Seller Scraper  v17")
     log.info("Range  : %s  →  %s  (%d days)", date_from_str, date_to_str, LOOKBACK_DAYS)
     log.info("=" * 64)
 
