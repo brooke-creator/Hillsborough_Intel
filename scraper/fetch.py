@@ -1,7 +1,7 @@
 """
-Hillsborough County Motivated Seller Lead Scraper v6
-Key fix: Document Type is a dropdown — click it, then select the matching option.
-Do NOT type into the name field.
+Hillsborough County Motivated Seller Lead Scraper v7
+Fix: Click correct Document Type field, not Person Type dropdown.
+Strategy: Click "Document Type" in left nav, then use keyboard to interact with the correct field.
 """
 
 import asyncio
@@ -45,26 +45,6 @@ DOC_TYPES = {
     "PRO":      ("probate",      "Probate"),
     "NOC":      ("construction", "Notice of Commencement"),
     "RELLP":    ("release",      "Release Lis Pendens"),
-}
-
-# Full display names as they appear in the dropdown
-DOC_DISPLAY = {
-    "LP":       "LIS PENDENS",
-    "NOFC":     "NOTICE OF",
-    "TAXDEED":  "TAX DEED",
-    "JUD":      "JUDGMENT",
-    "CCJ":      "CERTIFIED JUDGMENT",
-    "DRJUD":    "DOMESTIC",
-    "LNCORPTX": "CORP TAX",
-    "LNIRS":    "IRS LIEN",
-    "LNFED":    "FEDERAL LIEN",
-    "LN":       "LIEN",
-    "LNMECH":   "MECHANIC",
-    "LNHOA":    "HOA",
-    "MEDLN":    "MEDICAID",
-    "PRO":      "PROBATE",
-    "NOC":      "NOTICE OF COMMENCEMENT",
-    "RELLP":    "RELEASE LIS",
 }
 
 OUTPUT_PATHS = [Path("dashboard/records.json"), Path("data/records.json")]
@@ -219,15 +199,13 @@ def _parse_table(html: str, doc_code: str) -> list[dict]:
 
 async def _scrape_one(page, doc_code: str, date_from: str, date_to: str) -> list[dict]:
     results = []
-    display_hint = DOC_DISPLAY.get(doc_code, doc_code)
 
     for attempt in range(1, 4):
         try:
             await page.goto(CLERK_URL, wait_until="domcontentloaded", timeout=60_000)
             await page.wait_for_timeout(3_000)
 
-            # ── Step 1: Click "Document Type" in LEFT nav ────────────────────
-            # This switches the search mode — it's a list item on the left
+            # ── Step 1: Click "Document Type" in left nav ────────────────────
             clicked = False
             for selector in [
                 "li:has-text('Document Type')",
@@ -247,117 +225,93 @@ async def _scrape_one(page, doc_code: str, date_from: str, date_to: str) -> list
             if not clicked:
                 raise Exception("Could not click Document Type nav item")
 
-            # ── Step 2: Click the Document Type DROPDOWN (the big box) ───────
-            # This is the "Optionally, choose one or more document types" box
-            # It opens a scrollable list of ALL document types
-            dropdown_clicked = False
+            await page.screenshot(path=f"data/step1_{doc_code}.png")
+
+            # ── Step 2: Click the Document Type input field ──────────────────
+            # This field is BELOW the Person Type dropdown
+            # It has placeholder "Optionally, choose one or more document types"
+            await page.press("Escape")  # close any open dropdown first
+            await page.wait_for_timeout(500)
+
+            doc_field_clicked = False
             for selector in [
-                'input[placeholder*="choose one or more"]',
-                'input[placeholder*="document types"]',
-                'input[placeholder*="Optionally"]',
-                '.chosen-container',
-                '.select2-container',
-                'div[class*="chosen"]',
-                'div[class*="select2"]',
+                'input[placeholder="Optionally, choose one or more document types"]',
+                'input[placeholder*="choose one or more document"]',
+                'input[placeholder*="Optionally, choose"]',
             ]:
                 try:
                     el = page.locator(selector).first
-                    if await el.is_visible(timeout=3_000):
+                    if await el.is_visible(timeout=5_000):
                         await el.click()
                         await page.wait_for_timeout(1_000)
-                        dropdown_clicked = True
-                        log.info("[%s] opened document type dropdown", doc_code)
+                        doc_field_clicked = True
+                        log.info("[%s] clicked document type input field", doc_code)
                         break
                 except Exception:
                     continue
 
-            if not dropdown_clicked:
-                raise Exception("Could not open document type dropdown")
+            if not doc_field_clicked:
+                raise Exception("Could not click document type input field")
 
-            # Screenshot to see dropdown state
-            await page.screenshot(path=f"data/dropdown_{doc_code}.png")
+            await page.screenshot(path=f"data/step2_{doc_code}.png")
 
-            # ── Step 3: Find and click the matching option in the dropdown ────
-            # The dropdown shows items like "(LP) LIS PENDENS"
-            # Try clicking by the doc code in parentheses first
+            # ── Step 3: Type doc code to filter the list ─────────────────────
+            await page.keyboard.type(doc_code)
+            await page.wait_for_timeout(1_500)
+            await page.screenshot(path=f"data/step3_{doc_code}.png")
+
+            # ── Step 4: Click the matching option ────────────────────────────
             option_clicked = False
             for selector in [
                 f"li:has-text('({doc_code})')",
-                f"option:has-text('({doc_code})')",
                 f"li:has-text('({doc_code}) ')",
                 f".chosen-results li:has-text('({doc_code})')",
                 f".select2-results__option:has-text('({doc_code})')",
-                f"li:has-text('{display_hint}')",
+                f"div[class*='option']:has-text('({doc_code})')",
             ]:
                 try:
                     await page.click(selector, timeout=5_000)
                     option_clicked = True
-                    log.info("[%s] selected option from dropdown", doc_code)
+                    log.info("[%s] selected option", doc_code)
                     break
                 except Exception:
                     continue
 
             if not option_clicked:
-                # Try typing in the search box inside the dropdown to filter
-                for selector in [
-                    '.chosen-search input',
-                    '.select2-search input',
-                    'input[type="text"]',
-                ]:
-                    try:
-                        el = page.locator(selector).first
-                        if await el.is_visible(timeout=2_000):
-                            await el.fill(doc_code)
-                            await page.wait_for_timeout(1_000)
-                            # Now click first visible option
-                            await page.locator(f"li:has-text('({doc_code})')").first.click(timeout=3_000)
-                            option_clicked = True
-                            break
-                    except Exception:
-                        continue
-
-            if not option_clicked:
-                raise Exception(f"Could not select {doc_code} from dropdown")
+                # Try pressing Enter to select first option
+                await page.keyboard.press("Enter")
+                log.info("[%s] pressed Enter to select option", doc_code)
 
             await page.wait_for_timeout(500)
-            await page.screenshot(path=f"data/after_select_{doc_code}.png")
+            await page.screenshot(path=f"data/step4_{doc_code}.png")
 
-            # ── Step 4: Fill date range ───────────────────────────────────────
-            # Find date inputs by their current value pattern (they have dates pre-filled)
+            # ── Step 5: Fill date fields ──────────────────────────────────────
             all_inputs = page.locator('input[type="text"]')
             n = await all_inputs.count()
-            log.info("[%s] found %d text inputs", doc_code, n)
-
             begin_filled = end_filled = False
+
             for i in range(n):
                 try:
                     el  = all_inputs.nth(i)
-                    pid = (await el.get_attribute("id")          or "").lower()
-                    pph = (await el.get_attribute("placeholder") or "").lower()
-                    pnm = (await el.get_attribute("name")        or "").lower()
-                    val = (await el.input_value()                or "")
-                    hint = pid + pph + pnm
-
-                    # Skip the name/search fields — only target date fields
+                    val = (await el.input_value() or "")
                     if re.match(r"\d{1,2}/\d{1,2}/\d{4}", val):
                         if not begin_filled:
                             await el.click()
                             await el.press("Control+a")
                             await el.fill(date_from)
                             begin_filled = True
-                            log.info("[%s] filled begin date", doc_code)
                         elif not end_filled:
                             await el.click()
                             await el.press("Control+a")
                             await el.fill(date_to)
                             end_filled = True
-                            log.info("[%s] filled end date", doc_code)
                 except Exception:
                     continue
 
+            log.info("[%s] dates filled: begin=%s end=%s", doc_code, begin_filled, end_filled)
             await page.wait_for_timeout(500)
 
-            # ── Step 5: Click Search button ───────────────────────────────────
+            # ── Step 6: Click Search ──────────────────────────────────────────
             for selector in [
                 'input[value="Search"]',
                 'button:has-text("Search")',
@@ -374,7 +328,7 @@ async def _scrape_one(page, doc_code: str, date_from: str, date_to: str) -> list
             await page.wait_for_timeout(2_000)
             await page.screenshot(path=f"data/results_{doc_code}.png")
 
-            # ── Step 6: Collect results ───────────────────────────────────────
+            # ── Step 7: Collect results ───────────────────────────────────────
             page_num = 1
             while True:
                 html  = await page.content()
@@ -412,7 +366,7 @@ async def main():
     date_to_str   = date_to_dt.strftime("%m/%d/%Y")
 
     log.info("=" * 64)
-    log.info("Hillsborough County Motivated Seller Scraper  v6")
+    log.info("Hillsborough County Motivated Seller Scraper  v7")
     log.info("Range  : %s  →  %s  (%d days)", date_from_str, date_to_str, LOOKBACK_DAYS)
     log.info("=" * 64)
 
@@ -431,7 +385,6 @@ async def main():
         )
         page = await ctx.new_page()
 
-        # Initial screenshot
         try:
             await page.goto(CLERK_URL, wait_until="domcontentloaded", timeout=60_000)
             await page.wait_for_timeout(3_000)
@@ -440,8 +393,8 @@ async def main():
         except Exception as e:
             log.warning("Could not screenshot portal: %s", e)
 
-        # Test with first 3 doc types only
-        test_types = dict(list(DOC_TYPES.items())[:3])
+        # Test with LP only first
+        test_types = {"LP": DOC_TYPES["LP"]}
 
         for doc_code, (cat, cat_label) in test_types.items():
             log.info("── Fetching [%s] %s", doc_code, cat_label)
