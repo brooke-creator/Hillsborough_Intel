@@ -1,11 +1,11 @@
 """
-Hillsborough County Motivated Seller Lead Scraper v13
-Fix: Trigger jQuery chosen:updated after JS selection to make it stick.
+Hillsborough County Motivated Seller Lead Scraper v14
+Everything works! Just need to parse results correctly.
+LP selects, dates fill, search clicks. Now parse all tables.
 """
 
 import asyncio
 import csv
-import io
 import json
 import logging
 import os
@@ -157,73 +157,85 @@ def _parse_doc_type(raw: str) -> str:
     m = re.match(r"\(([A-Z]+)\)", raw.strip())
     return m.group(1) if m else raw.strip().upper()
 
-def _parse_html_table(html: str) -> list[dict]:
+def _parse_html(html: str) -> list[dict]:
+    """Parse ALL tables in the HTML looking for results."""
     records = []
     soup = BeautifulSoup(html, "lxml")
-    table = soup.find("table")
-    if not table: return records
-    rows = table.find_all("tr")
-    if len(rows) < 2: return records
-    headers = [th.get_text(" ", strip=True).upper() for th in rows[0].find_all(["th","td"])]
-    log.info("Table headers: %s", headers)
-    def col(cells, *names):
-        for name in names:
-            for i, h in enumerate(headers):
-                if name in h and i < len(cells):
-                    t = cells[i].get_text(" ", strip=True)
-                    if t: return t
-        return ""
-    for row in rows[1:]:
-        cells = row.find_all("td")
-        if not cells: continue
-        try:
-            link_tag  = row.find("a", href=True)
-            clerk_url = ""
-            if link_tag:
-                href = link_tag["href"]
-                clerk_url = href if href.startswith("http") else "https://publicaccess.hillsclerk.com" + href
-            doc_type_raw = col(cells, "DOC TYPE","TYPE","DOCUMENT")
-            doc_code     = _parse_doc_type(doc_type_raw)
-            doc_num  = col(cells, "INST","INSTRUMENT","DOC #","NUMBER") or (link_tag.get_text(strip=True) if link_tag else "")
-            filed    = col(cells, "RECORDING DATE","DATE","FILED")
-            grantor  = col(cells, "NAME","GRANTOR","PARTY 1","OWNER")
-            grantee  = col(cells, "CROSS","GRANTEE","PARTY 2")
-            legal    = col(cells, "LEGAL","DESCRIPTION")
-            if not doc_num and not grantor: continue
-            records.append({
-                "doc_num": doc_num, "doc_type": doc_code,
-                "filed": _norm_date(filed), "owner": grantor,
-                "grantee": grantee, "amount": None,
-                "legal": legal, "clerk_url": clerk_url,
-            })
-        except Exception: continue
-    return records
 
-def _parse_csv_direct(csv_text: str, doc_code: str) -> list[dict]:
-    records = []
-    try:
-        reader = csv.DictReader(io.StringIO(csv_text))
-        for row in reader:
+    # Log all tables found
+    all_tables = soup.find_all("table")
+    log.info("Found %d tables in HTML", len(all_tables))
+
+    # Log full page text around results area
+    results_div = soup.find("div", class_=re.compile(r"search-result|result|jsgrid", re.I))
+    if results_div:
+        log.info("Results div found: class=%s", results_div.get("class"))
+
+    for table_idx, table in enumerate(all_tables):
+        rows = table.find_all("tr")
+        if len(rows) < 2:
+            continue
+
+        headers = [th.get_text(" ", strip=True).upper() for th in rows[0].find_all(["th","td"])]
+        log.info("Table %d headers: %s", table_idx, headers)
+
+        # Skip tables that don't look like results
+        has_useful = any(h for h in headers if any(k in h for k in ["NAME","DOC","INST","DATE","LEGAL","TYPE"]))
+        if not has_useful:
+            continue
+
+        def col(cells, *names):
+            for name in names:
+                for i, h in enumerate(headers):
+                    if name in h and i < len(cells):
+                        t = cells[i].get_text(" ", strip=True)
+                        if t: return t
+            return ""
+
+        for row in rows[1:]:
+            cells = row.find_all("td")
+            if not cells: continue
             try:
-                R = {k.upper().strip(): (v or "").strip() for k, v in row.items()}
-                doc_type_raw = R.get("DOC TYPE") or R.get("TYPE") or doc_code
-                doc_type = _parse_doc_type(doc_type_raw)
-                name   = R.get("NAME") or R.get("GRANTOR") or ""
-                xname  = R.get("CROSS-PARTY NAME") or R.get("GRANTEE") or ""
-                filed  = R.get("RECORDING DATE") or R.get("DATE") or ""
-                legal  = R.get("LEGAL DESCRIPTION") or R.get("LEGAL") or ""
-                inst   = R.get("INST #") or R.get("INSTRUMENT") or ""
-                clerk_url = f"https://publicaccess.hillsclerk.com/oripublicaccess/?instrument={inst}" if inst else ""
-                if not name and not inst: continue
+                link_tag  = row.find("a", href=True)
+                clerk_url = ""
+                if link_tag:
+                    href = link_tag["href"]
+                    clerk_url = href if href.startswith("http") else "https://publicaccess.hillsclerk.com" + href
+
+                doc_type_raw = col(cells, "DOC TYPE","TYPE","DOCUMENT TYPE")
+                doc_code     = _parse_doc_type(doc_type_raw)
+                doc_num  = col(cells, "INST #","INST","INSTRUMENT","DOC #") or (link_tag.get_text(strip=True) if link_tag else "")
+                filed    = col(cells, "RECORDING DATE","RECORD DATE","DATE","FILED")
+                grantor  = col(cells, "NAME","GRANTOR","PARTY 1","OWNER")
+                grantee  = col(cells, "CROSS-PARTY","CROSS PARTY","GRANTEE","PARTY 2")
+                legal    = col(cells, "LEGAL DESCRIPTION","LEGAL","DESCRIPTION")
+
+                if not doc_num and not grantor:
+                    continue
+
                 records.append({
-                    "doc_num": inst, "doc_type": doc_type,
-                    "filed": _norm_date(filed), "owner": name,
-                    "grantee": xname, "amount": None,
-                    "legal": legal, "clerk_url": clerk_url,
+                    "doc_num":   doc_num,
+                    "doc_type":  doc_code,
+                    "filed":     _norm_date(filed),
+                    "owner":     grantor,
+                    "grantee":   grantee,
+                    "amount":    None,
+                    "legal":     legal,
+                    "clerk_url": clerk_url,
                 })
-            except Exception: continue
-    except Exception as e:
-        log.warning("CSV parse error: %s", e)
+            except Exception:
+                continue
+
+        if records:
+            log.info("Table %d yielded %d records", table_idx, len(records))
+            break
+
+    # If no tables worked, log the full HTML for debugging
+    if not records:
+        log.warning("No records from tables — logging page text snippet")
+        text = soup.get_text()[:2000]
+        log.info("Page text: %s", text)
+
     return records
 
 
@@ -234,17 +246,16 @@ async def scrape_one_doc_type(page, doc_code: str, date_from: str, date_to: str)
             await page.goto(CLERK_URL, wait_until="domcontentloaded", timeout=60_000)
             await page.wait_for_timeout(3_000)
 
-            # Click Document Type in left nav using exact ID from inspection
+            # Click Document Type nav using exact ID
             await page.click('#ORI-Document\\ Type', timeout=10_000)
             await page.wait_for_timeout(2_000)
             log.info("[%s] clicked Document Type nav", doc_code)
 
-            # Use JavaScript to select the option AND trigger jQuery chosen update
+            # Select doc type via JavaScript + jQuery
             selected = await page.evaluate(f"""
                 () => {{
                     const sel = document.querySelector('select.doc-type, select.for-chosen, select[class*="doc-type"], select[id*="OBKey"]');
                     if (!sel) return 'no select found';
-                    
                     let found = null;
                     for (const opt of sel.options) {{
                         if (opt.text.includes('({doc_code})')) {{
@@ -253,54 +264,40 @@ async def scrape_one_doc_type(page, doc_code: str, date_from: str, date_to: str)
                         }}
                     }}
                     if (!found) return 'option not found for {doc_code}';
-                    
-                    // Set the value
                     sel.value = found.value;
-                    
-                    // Fire native events
                     sel.dispatchEvent(new Event('change', {{bubbles: true}}));
                     sel.dispatchEvent(new Event('input', {{bubbles: true}}));
-                    
-                    // Fire jQuery events to update chosen.js widget
                     if (window.jQuery) {{
-                        const $sel = window.jQuery(sel);
-                        $sel.val(found.value);
-                        $sel.trigger('change');
-                        $sel.trigger('chosen:updated');
+                        window.jQuery(sel).val(found.value).trigger('change').trigger('chosen:updated');
                     }}
-                    
                     return 'selected: ' + found.text;
                 }}
             """)
-            log.info("[%s] JS result: %s", doc_code, selected)
+            log.info("[%s] JS: %s", doc_code, selected)
             await page.wait_for_timeout(2_000)
-            await page.screenshot(path=f"data/selected_{doc_code}.png")
 
-            # Fill date fields
+            # Fill date fields by class name (from inspection: record-begin, record-end)
+            begin_filled = end_filled = False
             all_inputs = page.locator('input[type="text"]')
             n = await all_inputs.count()
-            begin_filled = end_filled = False
             for i in range(n):
                 try:
                     el  = all_inputs.nth(i)
-                    val = (await el.input_value() or "")
-                    pid = (await el.get_attribute("id") or "").lower()
                     cls = (await el.get_attribute("class") or "").lower()
-                    if "record-begin" in cls or "begin" in pid:
+                    val = (await el.input_value() or "")
+                    if "record-begin" in cls:
                         await el.click()
                         await el.press("Control+a")
                         await el.fill(date_from)
                         begin_filled = True
-                        log.info("[%s] filled begin date", doc_code)
-                    elif "record-end" in cls or "end" in pid:
+                    elif "record-end" in cls:
                         await el.click()
                         await el.press("Control+a")
                         await el.fill(date_to)
                         end_filled = True
-                        log.info("[%s] filled end date", doc_code)
                 except Exception: continue
 
-            # Fallback positional fill if class-based didn't work
+            # Positional fallback
             if not begin_filled or not end_filled:
                 for i in range(n):
                     try:
@@ -319,9 +316,8 @@ async def scrape_one_doc_type(page, doc_code: str, date_from: str, date_to: str)
                                 end_filled = True
                     except Exception: continue
 
-            log.info("[%s] dates filled: begin=%s end=%s", doc_code, begin_filled, end_filled)
+            log.info("[%s] dates: begin=%s end=%s", doc_code, begin_filled, end_filled)
             await page.wait_for_timeout(500)
-            await page.screenshot(path=f"data/dates_{doc_code}.png")
 
             # Click Search
             for selector in ['input[value="Search"]', 'button:has-text("Search")', 'input[type="submit"]']:
@@ -333,38 +329,20 @@ async def scrape_one_doc_type(page, doc_code: str, date_from: str, date_to: str)
 
             await page.wait_for_load_state("domcontentloaded", timeout=30_000)
             await page.wait_for_timeout(3_000)
-            await page.screenshot(path=f"data/results_{doc_code}.png")
 
-            # Try Export to Spreadsheet
-            try:
-                async with page.expect_download(timeout=15_000) as dl:
-                    for selector in ['text=Export to Spreadsheet', 'button:has-text("Export")', 'a:has-text("Export")']:
-                        try:
-                            await page.click(selector, timeout=5_000)
-                            log.info("[%s] clicked Export", doc_code)
-                            break
-                        except Exception: continue
-                download = await dl.value
-                dl_path = Path(f"data/export_{doc_code}.csv")
-                await download.save_as(str(dl_path))
-                csv_text = dl_path.read_text(encoding="utf-8", errors="replace")
-                log.info("[%s] CSV: %d chars", doc_code, len(csv_text))
-                records = _parse_csv_direct(csv_text, doc_code)
-                log.info("[%s] CSV records: %d", doc_code, len(records))
-                if records:
-                    return records
-            except Exception as e:
-                log.warning("[%s] Export failed: %s", doc_code, e)
+            # Take full page screenshot
+            await page.screenshot(path=f"data/results_{doc_code}.png", full_page=True)
 
-            # Fallback HTML table
+            # Parse results — paginate through all pages
             page_num = 1
             while True:
                 html  = await page.content()
-                rows  = _parse_html_table(html)
+                rows  = _parse_html(html)
                 results.extend(rows)
-                log.info("[%s] page %d: %d rows", doc_code, page_num, len(rows))
-                soup2     = BeautifulSoup(html, "lxml")
-                next_link = soup2.find("a", string=re.compile(r"^\s*(Next|>>)\s*$", re.I))
+                log.info("[%s] page %d: %d rows (total: %d)", doc_code, page_num, len(rows), len(results))
+
+                soup      = BeautifulSoup(html, "lxml")
+                next_link = soup.find("a", string=re.compile(r"^\s*(Next|>>)\s*$", re.I))
                 if not next_link: break
                 try:
                     await page.click("a:has-text('Next')", timeout=8_000)
@@ -373,7 +351,7 @@ async def scrape_one_doc_type(page, doc_code: str, date_from: str, date_to: str)
                     page_num += 1
                 except Exception: break
 
-            log.info("[%s] total: %d", doc_code, len(results))
+            log.info("[%s] DONE: %d total records", doc_code, len(results))
             return results
 
         except PWTimeout:
@@ -391,7 +369,7 @@ async def main():
     date_to_str   = date_to_dt.strftime("%m/%d/%Y")
 
     log.info("=" * 64)
-    log.info("Hillsborough County Motivated Seller Scraper  v13")
+    log.info("Hillsborough County Motivated Seller Scraper  v14")
     log.info("Range  : %s  →  %s  (%d days)", date_from_str, date_to_str, LOOKBACK_DAYS)
     log.info("=" * 64)
 
