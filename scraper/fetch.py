@@ -1,6 +1,6 @@
 """
-Hillsborough County Motivated Seller Lead Scraper v15
-Fix: Scroll down after search + wait longer for results + better table parsing.
+Hillsborough County Motivated Seller Lead Scraper v16
+Fix: Close dropdown before clicking Search.
 """
 
 import asyncio
@@ -166,9 +166,8 @@ def _parse_html(html: str) -> list[dict]:
         rows = table.find_all("tr")
         if len(rows) < 2: continue
         headers = [th.get_text(" ", strip=True).upper() for th in rows[0].find_all(["th","td"])]
-        log.info("Table %d: %d rows, headers: %s", table_idx, len(rows), headers[:8])
+        log.info("Table %d: %d rows headers: %s", table_idx, len(rows), headers[:8])
 
-        # Must have NAME or DOC TYPE column to be a results table
         has_name = any("NAME" in h for h in headers)
         has_doc  = any("DOC" in h or "TYPE" in h for h in headers)
         if not has_name and not has_doc: continue
@@ -201,16 +200,11 @@ def _parse_html(html: str) -> list[dict]:
                 legal    = col(cells, "LEGAL DESCRIPTION","LEGAL","DESCRIPTION")
 
                 if not grantor and not doc_num: continue
-
                 table_records.append({
-                    "doc_num":   doc_num,
-                    "doc_type":  doc_code,
-                    "filed":     _norm_date(filed),
-                    "owner":     grantor,
-                    "grantee":   grantee,
-                    "amount":    None,
-                    "legal":     legal,
-                    "clerk_url": clerk_url,
+                    "doc_num": doc_num, "doc_type": doc_code,
+                    "filed": _norm_date(filed), "owner": grantor,
+                    "grantee": grantee, "amount": None,
+                    "legal": legal, "clerk_url": clerk_url,
                 })
             except Exception: continue
 
@@ -220,14 +214,19 @@ def _parse_html(html: str) -> list[dict]:
             break
 
     if not records:
-        # Log page text to debug
         text = soup.get_text(" ", strip=True)
-        # Look for "Performed a" text which appears above results
         if "Performed a" in text:
-            log.info("Search was performed — results text found in page")
+            log.info("Search ran but table parse failed — logging HTML snippet")
+            # Find the results section
+            results_section = soup.find("div", class_=re.compile(r"search-result|jsgrid|result", re.I))
+            if results_section:
+                log.info("Results section HTML: %s", str(results_section)[:1000])
+            else:
+                log.info("No results div found — full table HTML:")
+                for t in soup.find_all("table")[:3]:
+                    log.info("TABLE: %s", str(t)[:500])
         else:
-            log.warning("No 'Performed a' text found — search may not have run")
-        log.info("Page text snippet: %s", text[500:1500])
+            log.warning("Search did not run")
 
     return records
 
@@ -244,7 +243,7 @@ async def scrape_one_doc_type(page, doc_code: str, date_from: str, date_to: str)
             await page.wait_for_timeout(2_000)
             log.info("[%s] clicked Document Type nav", doc_code)
 
-            # Select doc type via JS + jQuery
+            # Select via JS + jQuery
             selected = await page.evaluate(f"""
                 () => {{
                     const sel = document.querySelector('select.doc-type, select.for-chosen, select[class*="doc-type"], select[id*="OBKey"]');
@@ -267,9 +266,19 @@ async def scrape_one_doc_type(page, doc_code: str, date_from: str, date_to: str)
                 }}
             """)
             log.info("[%s] JS: %s", doc_code, selected)
-            await page.wait_for_timeout(2_000)
+            await page.wait_for_timeout(1_000)
 
-            # Fill dates using class names from inspection
+            # ── CRITICAL: Close the dropdown before doing anything else ───────
+            await page.keyboard.press("Escape")
+            await page.wait_for_timeout(500)
+            await page.click("body")
+            await page.wait_for_timeout(500)
+            log.info("[%s] closed dropdown", doc_code)
+
+            # Screenshot to verify LP is selected and dropdown is closed
+            await page.screenshot(path=f"data/after_select_{doc_code}.png")
+
+            # Fill dates using class names
             begin_filled = end_filled = False
             all_inputs = page.locator('input[type="text"]')
             n = await all_inputs.count()
@@ -282,13 +291,13 @@ async def scrape_one_doc_type(page, doc_code: str, date_from: str, date_to: str)
                         await el.press("Control+a")
                         await el.fill(date_from)
                         begin_filled = True
-                        log.info("[%s] filled begin date via class", doc_code)
+                        log.info("[%s] filled begin date", doc_code)
                     elif "record-end" in cls:
                         await el.click()
                         await el.press("Control+a")
                         await el.fill(date_to)
                         end_filled = True
-                        log.info("[%s] filled end date via class", doc_code)
+                        log.info("[%s] filled end date", doc_code)
                 except Exception: continue
 
             # Positional fallback
@@ -313,7 +322,10 @@ async def scrape_one_doc_type(page, doc_code: str, date_from: str, date_to: str)
             log.info("[%s] dates: begin=%s end=%s", doc_code, begin_filled, end_filled)
             await page.wait_for_timeout(500)
 
-            # Click Search button
+            # Screenshot before search
+            await page.screenshot(path=f"data/before_search_{doc_code}.png")
+
+            # Click Search
             for selector in ['input[value="Search"]', 'button:has-text("Search")', 'input[type="submit"]']:
                 try:
                     await page.click(selector, timeout=8_000)
@@ -321,19 +333,18 @@ async def scrape_one_doc_type(page, doc_code: str, date_from: str, date_to: str)
                     break
                 except Exception: continue
 
-            # Wait for results to load
             await page.wait_for_load_state("domcontentloaded", timeout=30_000)
             await page.wait_for_timeout(4_000)
 
-            # Scroll down to load results
-            await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-            await page.wait_for_timeout(2_000)
+            # Scroll to middle where results appear
+            await page.evaluate("window.scrollTo(0, 800)")
+            await page.wait_for_timeout(1_000)
 
             # Full page screenshot
             await page.screenshot(path=f"data/results_{doc_code}.png", full_page=True)
             log.info("[%s] screenshot saved", doc_code)
 
-            # Parse results pages
+            # Parse all pages
             page_num = 1
             while True:
                 html  = await page.content()
@@ -369,7 +380,7 @@ async def main():
     date_to_str   = date_to_dt.strftime("%m/%d/%Y")
 
     log.info("=" * 64)
-    log.info("Hillsborough County Motivated Seller Scraper  v15")
+    log.info("Hillsborough County Motivated Seller Scraper  v16")
     log.info("Range  : %s  →  %s  (%d days)", date_from_str, date_to_str, LOOKBACK_DAYS)
     log.info("=" * 64)
 
