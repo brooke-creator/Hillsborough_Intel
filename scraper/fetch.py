@@ -1,6 +1,7 @@
 """
-Hillsborough County Motivated Seller Lead Scraper v18 - FINAL
-All 16 document types. Runs daily via GitHub Actions.
+Hillsborough County Motivated Seller Lead Scraper v19
+- All 16 doc types from hillsclerk.com
+- Address enrichment from HCPA for high-score leads (70+)
 """
 
 import asyncio
@@ -24,8 +25,10 @@ try:
 except ImportError:
     HAS_DBF = False
 
-CLERK_URL     = "https://publicaccess.hillsclerk.com/oripublicaccess/"
+CLERK_URL  = "https://publicaccess.hillsclerk.com/oripublicaccess/"
+HCPA_URL   = "https://gis.hcpafl.org/propertysearch/#/search/basic/name="
 LOOKBACK_DAYS = int(os.getenv("LOOKBACK_DAYS", "7"))
+ENRICH_MIN_SCORE = 70  # Only look up addresses for leads scored 70+
 
 TARGET_TYPES = {
     "LP","NOFC","TAXDEED","JUD","CCJ","DRJUD",
@@ -76,56 +79,6 @@ def _split_name(full: str):
     if len(parts) == 1: return "", parts[0]
     return " ".join(parts[1:]), parts[0]
 
-def _index_parcel(rec: dict, lookup: dict):
-    R = {k.upper(): (v or "") for k, v in rec.items()}
-    owner = _norm(R.get("OWNER") or R.get("OWN1") or R.get("OWNERNAME") or "")
-    if not owner: return
-    entry = {
-        "prop_address": _norm(R.get("SITE_ADDR") or R.get("SITEADDR") or ""),
-        "prop_city":    _norm(R.get("SITE_CITY") or R.get("SITECITY") or "TAMPA"),
-        "prop_state":   "FL",
-        "prop_zip":     _norm(R.get("SITE_ZIP")  or R.get("SITEZIP")  or ""),
-        "mail_address": _norm(R.get("ADDR_1")    or R.get("MAILADR1") or ""),
-        "mail_city":    _norm(R.get("CITY")       or R.get("MAILCITY") or ""),
-        "mail_state":   _norm(R.get("STATE")      or "FL"),
-        "mail_zip":     _norm(R.get("ZIP")        or R.get("MAILZIP")  or ""),
-    }
-    parts = owner.split()
-    variants = {owner}
-    if len(parts) >= 2:
-        variants.add(f"{parts[-1]} {' '.join(parts[:-1])}")
-        variants.add(f"{parts[-1]}, {' '.join(parts[:-1])}")
-    for v in variants:
-        if v: lookup[v] = entry
-
-def build_parcel_lookup() -> dict:
-    lookup: dict = {}
-    dbf_path = Path("data/parcels.dbf")
-    if HAS_DBF and dbf_path.exists():
-        try:
-            for rec in DBF(str(dbf_path), ignore_missing_memofile=True):
-                _index_parcel(dict(rec), lookup)
-            return lookup
-        except Exception: pass
-    csv_path = Path("data/parcels.csv")
-    if csv_path.exists():
-        try:
-            with open(csv_path, newline="", encoding="utf-8", errors="replace") as fh:
-                for row in csv.DictReader(fh): _index_parcel(row, lookup)
-            return lookup
-        except Exception: pass
-    log.warning("No parcel data — addresses will be empty")
-    return lookup
-
-def match_parcel(owner: str, lookup: dict) -> dict:
-    n = _norm(owner)
-    if n in lookup: return lookup[n]
-    parts = n.split()
-    if len(parts) >= 2:
-        for v in (f"{parts[-1]} {' '.join(parts[:-1])}", f"{parts[-1]}, {' '.join(parts[:-1])}"):
-            if v in lookup: return lookup[v]
-    return {}
-
 def score_record(rec: dict):
     flags, s = [], 30
     doc   = rec.get("doc_type", "")
@@ -160,16 +113,13 @@ def _parse_html(html: str) -> list[dict]:
     records = []
     soup = BeautifulSoup(html, "lxml")
     all_tables = soup.find_all("table")
-
     for table_idx, table in enumerate(all_tables):
         rows = table.find_all("tr")
         if len(rows) < 2: continue
         headers = [th.get_text(" ", strip=True).upper() for th in rows[0].find_all(["th","td"])]
-
         has_name = any("NAME" in h for h in headers)
         has_doc  = any("DOC" in h or "TYPE" in h for h in headers)
         if not has_name and not has_doc: continue
-
         def col(cells, *names):
             for name in names:
                 for i, h in enumerate(headers):
@@ -177,7 +127,6 @@ def _parse_html(html: str) -> list[dict]:
                         t = cells[i].get_text(" ", strip=True)
                         if t: return t
             return ""
-
         table_records = []
         for row in rows[1:]:
             cells = row.find_all("td")
@@ -188,7 +137,6 @@ def _parse_html(html: str) -> list[dict]:
                 if link_tag:
                     href = link_tag["href"]
                     clerk_url = href if href.startswith("http") else "https://publicaccess.hillsclerk.com" + href
-
                 doc_type_raw = col(cells, "DOC TYPE","TYPE","DOCUMENT TYPE","DOCTYPE")
                 doc_code     = _parse_doc_type(doc_type_raw)
                 doc_num  = col(cells, "INSTRUMENT #","INST #","INST","INSTRUMENT","DOC #") or (link_tag.get_text(strip=True) if link_tag else "")
@@ -196,7 +144,6 @@ def _parse_html(html: str) -> list[dict]:
                 grantor  = col(cells, "NAME","GRANTOR","PARTY 1","OWNER")
                 grantee  = col(cells, "CROSS-PARTY NAME","CROSS PARTY","CROSS-PARTY","GRANTEE","PARTY 2")
                 legal    = col(cells, "LEGAL DESCRIPTION","LEGAL","DESCRIPTION")
-
                 if not grantor and not doc_num: continue
                 table_records.append({
                     "doc_num": doc_num, "doc_type": doc_code,
@@ -205,13 +152,119 @@ def _parse_html(html: str) -> list[dict]:
                     "legal": legal, "clerk_url": clerk_url,
                 })
             except Exception: continue
-
         if table_records:
             records.extend(table_records)
             break
-
     return records
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# HCPA ADDRESS ENRICHMENT
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def enrich_address(page, owner: str) -> dict:
+    """Look up owner name on HCPA and return mailing + site addresses."""
+    empty = {"prop_address":"","prop_city":"","prop_state":"FL","prop_zip":"",
+             "mail_address":"","mail_city":"","mail_state":"FL","mail_zip":""}
+    try:
+        # Build search URL - search by last name first
+        parts = owner.strip().split()
+        if not parts: return empty
+        # Use first word as last name for search
+        search_term = parts[0]
+        url = f"https://gis.hcpafl.org/propertysearch/#/search/basic/name={search_term.replace(' ','%20')}"
+
+        await page.goto(url, wait_until="domcontentloaded", timeout=30_000)
+        await page.wait_for_timeout(2_000)
+
+        # Get search results HTML
+        html = await page.content()
+        soup = BeautifulSoup(html, "lxml")
+
+        # Find the results table and look for matching owner
+        rows = soup.find_all("tr")
+        parcel_url = None
+        for row in rows:
+            cells = row.find_all("td")
+            if len(cells) < 2: continue
+            row_text = row.get_text(" ", strip=True).upper()
+            # Check if this row matches our owner name
+            owner_norm = _norm(owner)
+            if any(p in row_text for p in owner_norm.split()[:2]):
+                # Find the link to the parcel detail page
+                link = row.find("a", href=True)
+                if link:
+                    href = link["href"]
+                    if "parcel" in href.lower():
+                        parcel_url = href if href.startswith("http") else "https://gis.hcpafl.org" + href
+                        break
+
+        if not parcel_url:
+            return empty
+
+        # Load parcel detail page
+        await page.goto(parcel_url, wait_until="domcontentloaded", timeout=30_000)
+        await page.wait_for_timeout(1_500)
+        html = await page.content()
+        soup = BeautifulSoup(html, "lxml")
+
+        # Parse mailing address
+        mail_addr = mail_city = mail_state = mail_zip = ""
+        site_addr = site_city = ""
+
+        # Find "Mailing Address" section
+        page_text = soup.get_text("\n", strip=True)
+        lines = [l.strip() for l in page_text.split("\n") if l.strip()]
+
+        for i, line in enumerate(lines):
+            if "Mailing Address" in line and i + 2 < len(lines):
+                mail_addr = lines[i+1] if i+1 < len(lines) else ""
+                mail_parts = lines[i+2] if i+2 < len(lines) else ""
+                # Parse "TAMPA, FL 33609-3505"
+                m = re.match(r"([^,]+),\s*([A-Z]{2})\s+([\d\-]+)", mail_parts)
+                if m:
+                    mail_city  = m.group(1).strip()
+                    mail_state = m.group(2).strip()
+                    mail_zip   = m.group(3).strip()
+                break
+
+        for i, line in enumerate(lines):
+            if "Site Address" in line and i + 1 < len(lines):
+                site_full = lines[i+1] if i+1 < len(lines) else ""
+                # Parse "5107 W PLATT ST, TAMPA"
+                if "," in site_full:
+                    parts2 = site_full.rsplit(",", 1)
+                    site_addr = parts2[0].strip()
+                    site_city = parts2[1].strip()
+                else:
+                    site_addr = site_full
+                    site_city = "TAMPA"
+                break
+
+        if not mail_addr:
+            mail_addr = site_addr
+            mail_city = site_city
+            mail_state = "FL"
+
+        return {
+            "prop_address": site_addr,
+            "prop_city":    site_city,
+            "prop_state":   "FL",
+            "prop_zip":     mail_zip,
+            "mail_address": mail_addr,
+            "mail_city":    mail_city,
+            "mail_state":   mail_state,
+            "mail_zip":     mail_zip,
+        }
+
+    except Exception as e:
+        log.debug("HCPA lookup failed for %s: %s", owner, e)
+        return empty
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CLERK SCRAPER
+# ─────────────────────────────────────────────────────────────────────────────
 
 async def scrape_one_doc_type(page, doc_code: str, date_from: str, date_to: str) -> list[dict]:
     results = []
@@ -220,26 +273,20 @@ async def scrape_one_doc_type(page, doc_code: str, date_from: str, date_to: str)
             await page.goto(CLERK_URL, wait_until="domcontentloaded", timeout=60_000)
             await page.wait_for_timeout(3_000)
 
-            # Click Document Type nav
             await page.click('#ORI-Document\\ Type', timeout=10_000)
             await page.wait_for_timeout(2_000)
 
-            # Select via JS + jQuery
             selected = await page.evaluate(f"""
                 () => {{
                     const sel = document.querySelector('select.doc-type, select.for-chosen, select[class*="doc-type"], select[id*="OBKey"]');
                     if (!sel) return 'no select found';
                     let found = null;
                     for (const opt of sel.options) {{
-                        if (opt.text.includes('({doc_code})')) {{
-                            found = opt;
-                            break;
-                        }}
+                        if (opt.text.includes('({doc_code})')) {{ found = opt; break; }}
                     }}
                     if (!found) return 'option not found for {doc_code}';
                     sel.value = found.value;
                     sel.dispatchEvent(new Event('change', {{bubbles: true}}));
-                    sel.dispatchEvent(new Event('input', {{bubbles: true}}));
                     if (window.jQuery) {{
                         window.jQuery(sel).val(found.value).trigger('change').trigger('chosen:updated');
                     }}
@@ -248,12 +295,9 @@ async def scrape_one_doc_type(page, doc_code: str, date_from: str, date_to: str)
             """)
             log.info("[%s] %s", doc_code, selected)
             await page.wait_for_timeout(1_000)
-
-            # Close dropdown
             await page.keyboard.press("Escape")
             await page.wait_for_timeout(500)
 
-            # Fill dates via JS to avoid calendar popup
             await page.evaluate(f"""
                 () => {{
                     const begins = document.querySelectorAll('input.record-begin, input[class*="record-begin"]');
@@ -269,19 +313,15 @@ async def scrape_one_doc_type(page, doc_code: str, date_from: str, date_to: str)
                 }}
             """)
             await page.wait_for_timeout(500)
-
-            # Close any calendar
             await page.keyboard.press("Escape")
             await page.wait_for_timeout(300)
 
-            # Click Search via JS
             await page.evaluate("""
                 () => {
                     const btns = document.querySelectorAll('input[value="Search"], button');
                     for (const btn of btns) {
                         if (btn.value === 'Search' || btn.textContent.trim() === 'Search') {
-                            btn.click();
-                            return;
+                            btn.click(); return;
                         }
                     }
                 }
@@ -291,14 +331,12 @@ async def scrape_one_doc_type(page, doc_code: str, date_from: str, date_to: str)
             await page.wait_for_load_state("domcontentloaded", timeout=30_000)
             await page.wait_for_timeout(4_000)
 
-            # Parse all pages
             page_num = 1
             while True:
                 html  = await page.content()
                 rows  = _parse_html(html)
                 results.extend(rows)
                 log.info("[%s] page %d: %d rows (total: %d)", doc_code, page_num, len(rows), len(results))
-
                 soup      = BeautifulSoup(html, "lxml")
                 next_link = soup.find("a", string=re.compile(r"^\s*(Next|>>)\s*$", re.I))
                 if not next_link: break
@@ -320,6 +358,10 @@ async def scrape_one_doc_type(page, doc_code: str, date_from: str, date_to: str)
     return results
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# MAIN
+# ─────────────────────────────────────────────────────────────────────────────
+
 async def main():
     date_to_dt    = datetime.utcnow()
     date_from_dt  = date_to_dt - timedelta(days=LOOKBACK_DAYS)
@@ -327,11 +369,10 @@ async def main():
     date_to_str   = date_to_dt.strftime("%m/%d/%Y")
 
     log.info("=" * 64)
-    log.info("Hillsborough County Motivated Seller Scraper  v18 FINAL")
+    log.info("Hillsborough County Motivated Seller Scraper  v19")
     log.info("Range  : %s  →  %s  (%d days)", date_from_str, date_to_str, LOOKBACK_DAYS)
     log.info("=" * 64)
 
-    parcel_lookup = build_parcel_lookup()
     all_records: list[dict] = []
 
     async with async_playwright() as pw:
@@ -345,37 +386,54 @@ async def main():
             timezone_id="America/New_York",
             accept_downloads=True,
         )
-        page = await ctx.new_page()
+        clerk_page = await ctx.new_page()
         Path("data").mkdir(exist_ok=True)
 
-        # ALL 16 document types
+        # ── Step 1: Scrape all doc types from clerk ───────────────────────────
         for doc_code, (cat, cat_label) in DOC_TYPE_MAP.items():
             log.info("── Fetching [%s] %s", doc_code, cat_label)
-            raw = await scrape_one_doc_type(page, doc_code, date_from_str, date_to_str)
+            raw = await scrape_one_doc_type(clerk_page, doc_code, date_from_str, date_to_str)
             for r in raw:
                 doc_type = r.get("doc_type","").upper()
                 if doc_type not in TARGET_TYPES: continue
-                parcel = match_parcel(r.get("owner",""), parcel_lookup)
-                score, flags = score_record({**r, "doc_type": doc_type, "cat": cat, **parcel})
+                score, flags = score_record({**r, "doc_type": doc_type, "cat": cat})
                 all_records.append({
                     "doc_num": r.get("doc_num",""), "doc_type": doc_type,
                     "filed": r.get("filed",""), "cat": cat, "cat_label": cat_label,
                     "owner": r.get("owner",""), "grantee": r.get("grantee",""),
                     "amount": r.get("amount"), "legal": r.get("legal",""),
-                    "prop_address": parcel.get("prop_address",""),
-                    "prop_city": parcel.get("prop_city",""),
-                    "prop_state": "FL",
-                    "prop_zip": parcel.get("prop_zip",""),
-                    "mail_address": parcel.get("mail_address",""),
-                    "mail_city": parcel.get("mail_city",""),
-                    "mail_state": parcel.get("mail_state","FL"),
-                    "mail_zip": parcel.get("mail_zip",""),
+                    "prop_address": "", "prop_city": "", "prop_state": "FL", "prop_zip": "",
+                    "mail_address": "", "mail_city": "", "mail_state": "FL", "mail_zip": "",
                     "clerk_url": r.get("clerk_url",""),
                     "flags": flags, "score": score,
                 })
 
+        # ── Step 2: Enrich high-score leads with HCPA addresses ───────────────
+        to_enrich = [r for r in all_records if r["score"] >= ENRICH_MIN_SCORE and r.get("owner")]
+        log.info("Enriching %d high-score leads with HCPA addresses...", len(to_enrich))
+
+        hcpa_page = await ctx.new_page()
+        enriched = 0
+        for i, rec in enumerate(to_enrich):
+            try:
+                addr = await enrich_address(hcpa_page, rec["owner"])
+                if addr.get("prop_address") or addr.get("mail_address"):
+                    rec.update(addr)
+                    # Recalculate score now that we have address
+                    score, flags = score_record(rec)
+                    rec["score"] = score
+                    rec["flags"] = flags
+                    enriched += 1
+                if (i + 1) % 10 == 0:
+                    log.info("Enriched %d/%d leads", i+1, len(to_enrich))
+                await asyncio.sleep(0.5)  # Be polite to HCPA server
+            except Exception as e:
+                log.debug("Enrich error for %s: %s", rec.get("owner",""), e)
+
+        log.info("Address enrichment complete: %d/%d leads got addresses", enriched, len(to_enrich))
         await browser.close()
 
+    # Sort by score
     all_records.sort(key=lambda x: x["score"], reverse=True)
     with_addr = sum(1 for r in all_records if r.get("prop_address"))
 
@@ -393,7 +451,7 @@ async def main():
         path.parent.mkdir(parents=True, exist_ok=True)
         with open(path, "w", encoding="utf-8") as fh:
             json.dump(payload, fh, indent=2, default=str)
-        log.info("Saved → %s  (%d records)", path, len(all_records))
+        log.info("Saved → %s  (%d records, %d with address)", path, len(all_records), with_addr)
 
     GHL_CSV_PATH.parent.mkdir(parents=True, exist_ok=True)
     GHL_HEADERS = ["First Name","Last Name","Mailing Address","Mailing City","Mailing State","Mailing Zip","Property Address","Property City","Property State","Property Zip","Lead Type","Document Type","Date Filed","Document Number","Amount/Debt Owed","Seller Score","Motivated Seller Flags","Source","Public Records URL"]
