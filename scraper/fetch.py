@@ -1,6 +1,6 @@
 """
-Hillsborough County Motivated Seller Lead Scraper v23
-Fix: Use hcpafl.org simple search instead of GIS site
+Hillsborough County Motivated Seller Lead Scraper v24
+Address enrichment: county-taxes.net autocomplete API
 """
 
 import asyncio
@@ -26,7 +26,6 @@ except ImportError:
     HAS_DBF = False
 
 CLERK_URL  = "https://publicaccess.hillsclerk.com/oripublicaccess/"
-HCPA_SEARCH = "https://gis.hcpafl.org/propertysearch/api/search/basic/name"
 LOOKBACK_DAYS = int(os.getenv("LOOKBACK_DAYS", "7"))
 ENRICH_MIN_SCORE = 70
 
@@ -159,13 +158,13 @@ def _parse_html(html: str) -> list[dict]:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# HCPA ADDRESS ENRICHMENT — Using requests (no browser needed)
+# ADDRESS ENRICHMENT via county-taxes.net autocomplete
 # ─────────────────────────────────────────────────────────────────────────────
 
-def enrich_address_requests(owner: str) -> dict:
+def enrich_address(owner: str) -> dict:
     """
-    Use requests library to call HCPA search directly.
-    No browser needed — much faster and harder to block.
+    Use county-taxes.net autocomplete API to find property address.
+    The autocomplete returns owner name + full address in one call.
     """
     empty = {
         "prop_address":"","prop_city":"","prop_state":"FL","prop_zip":"",
@@ -176,184 +175,124 @@ def enrich_address_requests(owner: str) -> dict:
         parts = owner_norm.split()
         if not parts: return empty
 
-        # Try the HCPA API endpoint directly
+        # Search using last name + first name (how county records are stored)
+        search_term = " ".join(parts[:2])
+
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-            "Accept": "application/json, text/html, */*",
-            "Referer": "https://gis.hcpafl.org/propertysearch/",
-            "Origin": "https://gis.hcpafl.org",
+            "Accept": "application/json",
+            "Referer": "https://county-taxes.net/hillsborough/property-tax",
+            "Origin": "https://county-taxes.net",
         }
 
-        # Try JSON API first
-        search_name = parts[0]
-        api_urls = [
-            f"https://gis.hcpafl.org/propertysearch/api/search/basic/name/{search_name}",
-            f"https://gis.hcpafl.org/propertysearch/api/search/owner/{search_name}",
-            f"https://gis.hcpafl.org/api/search?owner={search_name}",
-            f"https://gis.hcpafl.org/propertysearch/api/parcels?owner={search_name}",
+        # Try the autocomplete API endpoint
+        autocomplete_urls = [
+            f"https://county-taxes.net/hillsborough/property-tax/autocomplete?query={search_term.replace(' ','+')}",
+            f"https://county-taxes.net/api/hillsborough/property-tax/search?q={search_term.replace(' ','+')}",
+            f"https://county-taxes.net/hillsborough/property-tax/search?query={search_term.replace(' ','+')}",
         ]
 
-        for api_url in api_urls:
+        for url in autocomplete_urls:
             try:
-                r = requests.get(api_url, headers=headers, timeout=10, verify=False)
-                if r.status_code == 200 and r.text:
-                    log.debug("API hit: %s → %d bytes", api_url, len(r.text))
-                    # Try to parse as JSON
+                r = requests.get(url, headers=headers, timeout=10, verify=False)
+                log.debug("Autocomplete %s → status %d, %d bytes", url, r.status_code, len(r.text))
+                if r.status_code == 200 and r.text and len(r.text) > 10:
+                    log.info("Autocomplete hit for %s: %s", owner, r.text[:300])
+                    # Try JSON parse
                     try:
                         data = r.json()
-                        log.info("API JSON response for %s: %s", owner, str(data)[:200])
-                        # Extract address from JSON if possible
                         if isinstance(data, list) and data:
-                            item = data[0]
-                            site_addr = item.get("siteAddress") or item.get("site_address") or item.get("address") or ""
-                            mail_addr = item.get("mailingAddress") or item.get("mailing_address") or site_addr
-                            if site_addr:
-                                return {
-                                    "prop_address": site_addr,
-                                    "prop_city": item.get("siteCity","TAMPA"),
-                                    "prop_state": "FL",
-                                    "prop_zip": item.get("siteZip",""),
-                                    "mail_address": mail_addr,
-                                    "mail_city": item.get("mailCity",""),
-                                    "mail_state": "FL",
-                                    "mail_zip": item.get("mailZip",""),
-                                }
+                            # Find best match
+                            for item in data:
+                                item_text = _norm(str(item))
+                                if any(p in item_text for p in parts[:1]):
+                                    # Extract address from item
+                                    addr_str = ""
+                                    if isinstance(item, dict):
+                                        addr_str = item.get("address","") or item.get("situs","") or item.get("label","")
+                                    elif isinstance(item, str):
+                                        addr_str = item
+                                    if addr_str:
+                                        return _parse_address_string(addr_str)
                     except Exception:
-                        # Not JSON, try HTML parse
-                        soup = BeautifulSoup(r.text, "lxml")
-                        text = soup.get_text()
-                        if "Property Address" in text or "Site Address" in text:
-                            log.info("HTML response contains address data for %s", owner)
+                        pass
             except Exception:
                 continue
 
-        # Fallback: try the simple search page
-        search_url = f"https://hcpafl.org/Search/commonsearch.aspx?mode=owner&owner={search_name}"
+        # Try direct page scrape with requests
+        search_url = f"https://county-taxes.net/hillsborough/property-tax?search={search_term.replace(' ','+')}"
         try:
             r = requests.get(search_url, headers=headers, timeout=15, verify=False)
             if r.status_code == 200:
                 soup = BeautifulSoup(r.text, "lxml")
-                log.debug("Simple search page: %d bytes, title: %s",
-                    len(r.text), soup.title.get_text() if soup.title else "none")
-                # Look for address data
-                lines = [l.strip() for l in soup.get_text("\n").split("\n") if l.strip()]
-                for i, line in enumerate(lines):
-                    if "Site Address" in line or "Property Address" in line:
-                        if i + 1 < len(lines):
-                            log.info("Found address line for %s: %s", owner, lines[i+1])
+                # Look for owner name in page
+                page_text = soup.get_text()
+                if owner_norm.split()[0] in page_text.upper():
+                    log.info("Found owner on search page for %s", owner)
+                    # Try to extract address
+                    lines = [l.strip() for l in page_text.split("\n") if l.strip()]
+                    for i, line in enumerate(lines):
+                        if parts[0] in _norm(line):
+                            # Look for address pattern nearby
+                            for j in range(max(0,i-2), min(len(lines), i+3)):
+                                addr_match = re.search(r"\d+\s+[A-Z].*(?:DR|ST|AVE|RD|LN|CT|WAY|BLVD|PL|TER|CIR)", lines[j].upper())
+                                if addr_match:
+                                    return _parse_address_string(lines[j])
         except Exception as e:
-            log.debug("Simple search failed: %s", e)
+            log.debug("Direct scrape failed: %s", e)
 
         return empty
 
     except Exception as e:
-        log.debug("HCPA requests lookup failed for %s: %s", owner, e)
+        log.debug("Enrichment failed for %s: %s", owner, e)
         return empty
 
 
-async def enrich_address_playwright(page, owner: str) -> dict:
-    """Playwright fallback for address lookup."""
+def _parse_address_string(addr_str: str) -> dict:
+    """Parse an address string like '4901 LONDONDERRY DR, TAMPA, FL 33647-1333'"""
     empty = {
         "prop_address":"","prop_city":"","prop_state":"FL","prop_zip":"",
         "mail_address":"","mail_city":"","mail_state":"FL","mail_zip":""
     }
     try:
-        owner_norm = _norm(owner)
-        parts = owner_norm.split()
-        if not parts: return empty
-
-        search_term = "%20".join(parts[:2])
-        search_url = f"https://gis.hcpafl.org/propertysearch/#/search/basic/owner={search_term}"
-
-        await page.goto(search_url, wait_until="networkidle", timeout=45_000)
-        await page.wait_for_timeout(5_000)
-
-        html = await page.content()
-        soup = BeautifulSoup(html, "lxml")
-
-        # Find parcel link
-        parcel_url = None
-        owner_parts = owner_norm.split()[:1]
-
-        for row in soup.find_all("tr"):
-            cells = row.find_all("td")
-            if len(cells) < 2: continue
-            cell_texts = [_norm(c.get_text()) for c in cells]
-            row_text = " ".join(cell_texts)
-            if all(p in row_text for p in owner_parts):
-                link = row.find("a", href=True)
-                if link:
-                    href = link["href"]
-                    parcel_url = href if href.startswith("http") else "https://gis.hcpafl.org" + href
-                    break
-
-        if not parcel_url:
-            # Try first result
-            for a in soup.find_all("a", href=True):
-                href = a["href"]
-                if "parcel" in href.lower() and len(a.get_text(strip=True)) > 3:
-                    parcel_url = href if href.startswith("http") else "https://gis.hcpafl.org" + href
-                    break
-
-        if not parcel_url:
-            return empty
-
-        await page.goto(parcel_url, wait_until="networkidle", timeout=45_000)
-        await page.wait_for_timeout(3_000)
-        html = await page.content()
-        soup = BeautifulSoup(html, "lxml")
-
-        lines = [l.strip() for l in soup.get_text("\n").split("\n") if l.strip()]
-        mail_addr = mail_city = mail_state = mail_zip = ""
-        site_addr = site_city = ""
-
-        for i, line in enumerate(lines):
-            if "Mailing Address" in line:
-                if i + 1 < len(lines): mail_addr = lines[i+1]
-                if i + 2 < len(lines):
-                    m = re.match(r"(.+?),\s*([A-Z]{2})\s+([\d\-]+)", lines[i+2])
-                    if m:
-                        mail_city  = m.group(1).strip()
-                        mail_state = m.group(2).strip()
-                        mail_zip   = m.group(3).strip()
-                break
-
-        for i, line in enumerate(lines):
-            if "Site Address" in line:
-                if i + 1 < len(lines):
-                    site_full = lines[i+1]
-                    if "," in site_full:
-                        p2 = site_full.rsplit(",", 1)
-                        site_addr = p2[0].strip()
-                        site_city = p2[1].strip()
-                    else:
-                        site_addr = site_full
-                        site_city = "TAMPA"
-                break
-
-        if not mail_addr:
-            mail_addr = site_addr
-            mail_city = site_city
-            mail_state = "FL"
-
-        if not site_addr and not mail_addr:
-            return empty
-
-        log.info("✓ %s → %s", owner, site_addr)
-        return {
-            "prop_address": site_addr,
-            "prop_city":    site_city,
-            "prop_state":   "FL",
-            "prop_zip":     mail_zip,
-            "mail_address": mail_addr,
-            "mail_city":    mail_city,
-            "mail_state":   mail_state or "FL",
-            "mail_zip":     mail_zip,
-        }
-
-    except Exception as e:
-        log.debug("Playwright HCPA failed for %s: %s", owner, e)
-        return empty
+        addr_str = addr_str.strip()
+        # Pattern: street, city, state zip
+        m = re.match(r"(.+?),\s*([^,]+?),\s*([A-Z]{2})\s+([\d\-]+)", addr_str)
+        if m:
+            street = m.group(1).strip()
+            city   = m.group(2).strip()
+            state  = m.group(3).strip()
+            zip_   = m.group(4).strip()
+            return {
+                "prop_address": street,
+                "prop_city":    city,
+                "prop_state":   state,
+                "prop_zip":     zip_,
+                "mail_address": street,
+                "mail_city":    city,
+                "mail_state":   state,
+                "mail_zip":     zip_,
+            }
+        # Try simpler pattern: street, city state zip
+        m2 = re.match(r"(.+?),\s*([^,]+?\s+[A-Z]{2}\s+[\d\-]+)", addr_str)
+        if m2:
+            street = m2.group(1).strip()
+            rest = m2.group(2).strip()
+            m3 = re.match(r"(.+?)\s+([A-Z]{2})\s+([\d\-]+)", rest)
+            if m3:
+                return {
+                    "prop_address": street,
+                    "prop_city":    m3.group(1).strip(),
+                    "prop_state":   m3.group(2).strip(),
+                    "prop_zip":     m3.group(3).strip(),
+                    "mail_address": street,
+                    "mail_city":    m3.group(1).strip(),
+                    "mail_state":   m3.group(2).strip(),
+                    "mail_zip":     m3.group(3).strip(),
+                }
+    except Exception:
+        pass
+    return empty
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -463,7 +402,7 @@ async def main():
     date_to_str   = date_to_dt.strftime("%m/%d/%Y")
 
     log.info("=" * 64)
-    log.info("Hillsborough County Motivated Seller Scraper  v23")
+    log.info("Hillsborough County Motivated Seller Scraper  v24")
     log.info("Range  : %s  →  %s  (%d days)", date_from_str, date_to_str, LOOKBACK_DAYS)
     log.info("=" * 64)
 
@@ -502,45 +441,37 @@ async def main():
                     "flags": flags, "score": score,
                 })
 
-        # ── Step 2: Test requests-based HCPA lookup first ────────────────────
-        to_enrich = [r for r in all_records if r["score"] >= ENRICH_MIN_SCORE and r.get("owner")]
-        log.info("Enriching %d high-score leads...", len(to_enrich))
-
-        # Test requests approach on first 3 leads
-        if to_enrich:
-            log.info("Testing requests-based HCPA lookup...")
-            for test_rec in to_enrich[:3]:
-                result = enrich_address_requests(test_rec["owner"])
-                log.info("Requests test for %s: %s", test_rec["owner"], result)
-
-        # ── Step 3: Use Playwright for HCPA ──────────────────────────────────
-        hcpa_page = await ctx.new_page()
-
-        enriched = 0
-        for i, rec in enumerate(to_enrich):
-            try:
-                # Try requests first (faster)
-                addr = enrich_address_requests(rec["owner"])
-
-                # Fall back to Playwright if requests fails
-                if not addr.get("prop_address") and not addr.get("mail_address"):
-                    addr = await enrich_address_playwright(hcpa_page, rec["owner"])
-
-                if addr.get("prop_address") or addr.get("mail_address"):
-                    rec.update(addr)
-                    score, flags = score_record(rec)
-                    rec["score"] = score
-                    rec["flags"] = flags
-                    enriched += 1
-
-                if (i + 1) % 10 == 0:
-                    log.info("Progress: %d/%d enriched, %d got addresses", i+1, len(to_enrich), enriched)
-                await asyncio.sleep(0.3)
-            except Exception as e:
-                log.debug("Enrich error for %s: %s", rec.get("owner",""), e)
-
-        log.info("Enrichment complete: %d/%d got addresses", enriched, len(to_enrich))
         await browser.close()
+
+    # ── Step 2: Enrich with county-taxes.net (no browser needed!) ────────────
+    to_enrich = [r for r in all_records if r["score"] >= ENRICH_MIN_SCORE and r.get("owner")]
+    log.info("Enriching %d high-score leads via county-taxes.net...", len(to_enrich))
+
+    # Test first 3 leads
+    if to_enrich:
+        log.info("--- Testing address enrichment ---")
+        for test_rec in to_enrich[:3]:
+            result = enrich_address(test_rec["owner"])
+            log.info("Test [%s] → %s", test_rec["owner"], result)
+
+    enriched = 0
+    for i, rec in enumerate(to_enrich):
+        try:
+            addr = enrich_address(rec["owner"])
+            if addr.get("prop_address") or addr.get("mail_address"):
+                rec.update(addr)
+                score, flags = score_record(rec)
+                rec["score"] = score
+                rec["flags"] = flags
+                enriched += 1
+            if (i + 1) % 20 == 0:
+                log.info("Progress: %d/%d enriched, %d got addresses", i+1, len(to_enrich), enriched)
+            import time
+            time.sleep(0.2)
+        except Exception as e:
+            log.debug("Enrich error for %s: %s", rec.get("owner",""), e)
+
+    log.info("Enrichment complete: %d/%d got addresses", enriched, len(to_enrich))
 
     all_records.sort(key=lambda x: x["score"], reverse=True)
     with_addr = sum(1 for r in all_records if r.get("prop_address"))
