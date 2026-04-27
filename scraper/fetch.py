@@ -1,8 +1,6 @@
 """
-Hillsborough County Motivated Seller Lead Scraper v20
-- All 16 doc types from hillsclerk.com
-- Address enrichment from HCPA for high-score leads (70+)
-- Fixed HCPA search to use actual search form
+Hillsborough County Motivated Seller Lead Scraper v21
+Fix: HCPA uses owner= not name= in URL
 """
 
 import asyncio
@@ -163,7 +161,6 @@ def _parse_html(html: str) -> list[dict]:
 # ─────────────────────────────────────────────────────────────────────────────
 
 async def enrich_address(page, owner: str) -> dict:
-    """Search HCPA by owner name and return property + mailing addresses."""
     empty = {
         "prop_address":"","prop_city":"","prop_state":"FL","prop_zip":"",
         "mail_address":"","mail_city":"","mail_state":"FL","mail_zip":""
@@ -173,54 +170,43 @@ async def enrich_address(page, owner: str) -> dict:
         parts = owner_norm.split()
         if not parts: return empty
 
-        # Use first word (last name) as search term
-        search_name = parts[0]
+        # Use full owner name — HCPA URL format is owner=LASTNAME%20FIRSTNAME
+        search_term = "%20".join(parts[:2])  # Use first two words
+        search_url = f"https://gis.hcpafl.org/propertysearch/#/search/basic/owner={search_term}"
 
-        # Build direct search URL - HCPA supports name search via URL hash
-        search_url = f"https://gis.hcpafl.org/propertysearch/#/search/basic/name={search_name}"
         await page.goto(search_url, wait_until="domcontentloaded", timeout=30_000)
         await page.wait_for_timeout(3_000)
 
-        # Take screenshot for first lead to debug
         html = await page.content()
         soup = BeautifulSoup(html, "lxml")
 
-        # Log page title and text snippet for debugging
-        title = soup.title.get_text() if soup.title else "no title"
-        log.debug("HCPA page title: %s", title)
-
-        # Find matching row in results table
+        # Find matching row - look for folio link
         parcel_url = None
-        all_links = soup.find_all("a", href=True)
-        log.debug("Found %d links on HCPA page for %s", len(all_links), search_name)
+        owner_norm_parts = owner_norm.split()[:2]
 
-        for a in all_links:
-            href = a.get("href","")
-            link_text = _norm(a.get_text())
-            parent_text = _norm(a.parent.get_text() if a.parent else "")
-            combined = link_text + " " + parent_text
+        # Check all table rows for name match
+        for row in soup.find_all("tr"):
+            row_text = _norm(row.get_text())
+            if all(p in row_text for p in owner_norm_parts[:1]):
+                link = row.find("a", href=True)
+                if link:
+                    href = link["href"]
+                    if "parcel" in href.lower() or "folio" in href.lower():
+                        parcel_url = href if href.startswith("http") else "https://gis.hcpafl.org" + href
+                        break
 
-            # Check if any part of owner name matches
-            name_parts = owner_norm.split()[:2]
-            if any(p in combined for p in name_parts):
-                if "parcel" in href.lower() or "folio" in href.lower():
-                    parcel_url = href if href.startswith("http") else "https://gis.hcpafl.org" + href
-                    break
-
-        # Also check table rows
+        # Also check all links on page
         if not parcel_url:
-            for row in soup.find_all("tr"):
-                row_text = _norm(row.get_text())
-                name_parts = owner_norm.split()[:2]
-                if all(p in row_text for p in name_parts[:1]):
-                    link = row.find("a", href=True)
-                    if link:
-                        href = link["href"]
+            for a in soup.find_all("a", href=True):
+                href = a.get("href", "")
+                if "parcel" in href.lower():
+                    parent_text = _norm(a.parent.get_text() if a.parent else "")
+                    if any(p in parent_text for p in owner_norm_parts[:1]):
                         parcel_url = href if href.startswith("http") else "https://gis.hcpafl.org" + href
                         break
 
         if not parcel_url:
-            log.debug("No parcel link found for %s", owner)
+            log.debug("No parcel link for: %s (searched: %s)", owner, search_term)
             return empty
 
         # Load parcel detail page
@@ -229,11 +215,10 @@ async def enrich_address(page, owner: str) -> dict:
         html = await page.content()
         soup = BeautifulSoup(html, "lxml")
 
-        # Extract addresses from page text
         lines = [l.strip() for l in soup.get_text("\n").split("\n") if l.strip()]
 
         mail_addr = mail_city = mail_state = mail_zip = ""
-        site_addr = site_city = site_zip = ""
+        site_addr = site_city = ""
 
         for i, line in enumerate(lines):
             if "Mailing Address" in line:
@@ -263,12 +248,12 @@ async def enrich_address(page, owner: str) -> dict:
             mail_addr  = site_addr
             mail_city  = site_city
             mail_state = "FL"
-            mail_zip   = site_zip
+            mail_zip   = mail_zip
 
         if not site_addr and not mail_addr:
             return empty
 
-        log.debug("Found address for %s: %s, %s", owner, site_addr, site_city)
+        log.info("✓ Address found for %s: %s", owner, site_addr)
         return {
             "prop_address": site_addr,
             "prop_city":    site_city,
@@ -392,7 +377,7 @@ async def main():
     date_to_str   = date_to_dt.strftime("%m/%d/%Y")
 
     log.info("=" * 64)
-    log.info("Hillsborough County Motivated Seller Scraper  v20")
+    log.info("Hillsborough County Motivated Seller Scraper  v21")
     log.info("Range  : %s  →  %s  (%d days)", date_from_str, date_to_str, LOOKBACK_DAYS)
     log.info("=" * 64)
 
@@ -435,21 +420,25 @@ async def main():
         to_enrich = [r for r in all_records if r["score"] >= ENRICH_MIN_SCORE and r.get("owner")]
         log.info("Enriching %d high-score leads with HCPA addresses...", len(to_enrich))
 
-        # Take screenshot of HCPA for first lead to debug
         hcpa_page = await ctx.new_page()
 
-        # Test one lookup with full logging
+        # Test first lookup with screenshot
         if to_enrich:
             test_owner = to_enrich[0]["owner"]
-            log.info("Testing HCPA lookup for: %s", test_owner)
-            search_name = _norm(test_owner).split()[0]
-            test_url = f"https://gis.hcpafl.org/propertysearch/#/search/basic/name={search_name}"
+            test_parts = _norm(test_owner).split()[:2]
+            test_term  = "%20".join(test_parts)
+            test_url   = f"https://gis.hcpafl.org/propertysearch/#/search/basic/owner={test_term}"
+            log.info("Testing HCPA lookup: %s → %s", test_owner, test_url)
             await hcpa_page.goto(test_url, wait_until="domcontentloaded", timeout=30_000)
             await hcpa_page.wait_for_timeout(3_000)
             await hcpa_page.screenshot(path="data/hcpa_test.png", full_page=True)
             html = await hcpa_page.content()
             soup = BeautifulSoup(html, "lxml")
-            log.info("HCPA test page text: %s", soup.get_text()[:500])
+            # Log all table rows found
+            rows = soup.find_all("tr")
+            log.info("HCPA test: found %d table rows", len(rows))
+            for row in rows[:5]:
+                log.info("  ROW: %s", _norm(row.get_text())[:100])
 
         enriched = 0
         for i, rec in enumerate(to_enrich):
@@ -462,12 +451,12 @@ async def main():
                     rec["flags"] = flags
                     enriched += 1
                 if (i + 1) % 10 == 0:
-                    log.info("Enriched %d/%d leads (%d got addresses)", i+1, len(to_enrich), enriched)
+                    log.info("Progress: %d/%d enriched, %d got addresses", i+1, len(to_enrich), enriched)
                 await asyncio.sleep(0.5)
             except Exception as e:
                 log.debug("Enrich error for %s: %s", rec.get("owner",""), e)
 
-        log.info("Address enrichment complete: %d/%d leads got addresses", enriched, len(to_enrich))
+        log.info("Enrichment complete: %d/%d got addresses", enriched, len(to_enrich))
         await browser.close()
 
     all_records.sort(key=lambda x: x["score"], reverse=True)
