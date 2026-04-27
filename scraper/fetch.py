@@ -1,6 +1,6 @@
 """
-Hillsborough County Motivated Seller Lead Scraper v21
-Fix: HCPA uses owner= not name= in URL
+Hillsborough County Motivated Seller Lead Scraper v23
+Fix: Use hcpafl.org simple search instead of GIS site
 """
 
 import asyncio
@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import urllib3
+import requests
 from bs4 import BeautifulSoup
 from playwright.async_api import async_playwright, TimeoutError as PWTimeout
 
@@ -25,6 +26,7 @@ except ImportError:
     HAS_DBF = False
 
 CLERK_URL  = "https://publicaccess.hillsclerk.com/oripublicaccess/"
+HCPA_SEARCH = "https://gis.hcpafl.org/propertysearch/api/search/basic/name"
 LOOKBACK_DAYS = int(os.getenv("LOOKBACK_DAYS", "7"))
 ENRICH_MIN_SCORE = 70
 
@@ -157,10 +159,14 @@ def _parse_html(html: str) -> list[dict]:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# HCPA ADDRESS ENRICHMENT
+# HCPA ADDRESS ENRICHMENT — Using requests (no browser needed)
 # ─────────────────────────────────────────────────────────────────────────────
 
-async def enrich_address(page, owner: str) -> dict:
+def enrich_address_requests(owner: str) -> dict:
+    """
+    Use requests library to call HCPA search directly.
+    No browser needed — much faster and harder to block.
+    """
     empty = {
         "prop_address":"","prop_city":"","prop_state":"FL","prop_zip":"",
         "mail_address":"","mail_city":"","mail_state":"FL","mail_zip":""
@@ -170,53 +176,134 @@ async def enrich_address(page, owner: str) -> dict:
         parts = owner_norm.split()
         if not parts: return empty
 
-        # Use full owner name — HCPA URL format is owner=LASTNAME%20FIRSTNAME
-        search_term = "%20".join(parts[:2])  # Use first two words
+        # Try the HCPA API endpoint directly
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "Accept": "application/json, text/html, */*",
+            "Referer": "https://gis.hcpafl.org/propertysearch/",
+            "Origin": "https://gis.hcpafl.org",
+        }
+
+        # Try JSON API first
+        search_name = parts[0]
+        api_urls = [
+            f"https://gis.hcpafl.org/propertysearch/api/search/basic/name/{search_name}",
+            f"https://gis.hcpafl.org/propertysearch/api/search/owner/{search_name}",
+            f"https://gis.hcpafl.org/api/search?owner={search_name}",
+            f"https://gis.hcpafl.org/propertysearch/api/parcels?owner={search_name}",
+        ]
+
+        for api_url in api_urls:
+            try:
+                r = requests.get(api_url, headers=headers, timeout=10, verify=False)
+                if r.status_code == 200 and r.text:
+                    log.debug("API hit: %s → %d bytes", api_url, len(r.text))
+                    # Try to parse as JSON
+                    try:
+                        data = r.json()
+                        log.info("API JSON response for %s: %s", owner, str(data)[:200])
+                        # Extract address from JSON if possible
+                        if isinstance(data, list) and data:
+                            item = data[0]
+                            site_addr = item.get("siteAddress") or item.get("site_address") or item.get("address") or ""
+                            mail_addr = item.get("mailingAddress") or item.get("mailing_address") or site_addr
+                            if site_addr:
+                                return {
+                                    "prop_address": site_addr,
+                                    "prop_city": item.get("siteCity","TAMPA"),
+                                    "prop_state": "FL",
+                                    "prop_zip": item.get("siteZip",""),
+                                    "mail_address": mail_addr,
+                                    "mail_city": item.get("mailCity",""),
+                                    "mail_state": "FL",
+                                    "mail_zip": item.get("mailZip",""),
+                                }
+                    except Exception:
+                        # Not JSON, try HTML parse
+                        soup = BeautifulSoup(r.text, "lxml")
+                        text = soup.get_text()
+                        if "Property Address" in text or "Site Address" in text:
+                            log.info("HTML response contains address data for %s", owner)
+            except Exception:
+                continue
+
+        # Fallback: try the simple search page
+        search_url = f"https://hcpafl.org/Search/commonsearch.aspx?mode=owner&owner={search_name}"
+        try:
+            r = requests.get(search_url, headers=headers, timeout=15, verify=False)
+            if r.status_code == 200:
+                soup = BeautifulSoup(r.text, "lxml")
+                log.debug("Simple search page: %d bytes, title: %s",
+                    len(r.text), soup.title.get_text() if soup.title else "none")
+                # Look for address data
+                lines = [l.strip() for l in soup.get_text("\n").split("\n") if l.strip()]
+                for i, line in enumerate(lines):
+                    if "Site Address" in line or "Property Address" in line:
+                        if i + 1 < len(lines):
+                            log.info("Found address line for %s: %s", owner, lines[i+1])
+        except Exception as e:
+            log.debug("Simple search failed: %s", e)
+
+        return empty
+
+    except Exception as e:
+        log.debug("HCPA requests lookup failed for %s: %s", owner, e)
+        return empty
+
+
+async def enrich_address_playwright(page, owner: str) -> dict:
+    """Playwright fallback for address lookup."""
+    empty = {
+        "prop_address":"","prop_city":"","prop_state":"FL","prop_zip":"",
+        "mail_address":"","mail_city":"","mail_state":"FL","mail_zip":""
+    }
+    try:
+        owner_norm = _norm(owner)
+        parts = owner_norm.split()
+        if not parts: return empty
+
+        search_term = "%20".join(parts[:2])
         search_url = f"https://gis.hcpafl.org/propertysearch/#/search/basic/owner={search_term}"
 
-        await page.goto(search_url, wait_until="domcontentloaded", timeout=30_000)
-        await page.wait_for_timeout(3_000)
+        await page.goto(search_url, wait_until="networkidle", timeout=45_000)
+        await page.wait_for_timeout(5_000)
 
         html = await page.content()
         soup = BeautifulSoup(html, "lxml")
 
-        # Find matching row - look for folio link
+        # Find parcel link
         parcel_url = None
-        owner_norm_parts = owner_norm.split()[:2]
+        owner_parts = owner_norm.split()[:1]
 
-        # Check all table rows for name match
         for row in soup.find_all("tr"):
-            row_text = _norm(row.get_text())
-            if all(p in row_text for p in owner_norm_parts[:1]):
+            cells = row.find_all("td")
+            if len(cells) < 2: continue
+            cell_texts = [_norm(c.get_text()) for c in cells]
+            row_text = " ".join(cell_texts)
+            if all(p in row_text for p in owner_parts):
                 link = row.find("a", href=True)
                 if link:
                     href = link["href"]
-                    if "parcel" in href.lower() or "folio" in href.lower():
-                        parcel_url = href if href.startswith("http") else "https://gis.hcpafl.org" + href
-                        break
+                    parcel_url = href if href.startswith("http") else "https://gis.hcpafl.org" + href
+                    break
 
-        # Also check all links on page
         if not parcel_url:
+            # Try first result
             for a in soup.find_all("a", href=True):
-                href = a.get("href", "")
-                if "parcel" in href.lower():
-                    parent_text = _norm(a.parent.get_text() if a.parent else "")
-                    if any(p in parent_text for p in owner_norm_parts[:1]):
-                        parcel_url = href if href.startswith("http") else "https://gis.hcpafl.org" + href
-                        break
+                href = a["href"]
+                if "parcel" in href.lower() and len(a.get_text(strip=True)) > 3:
+                    parcel_url = href if href.startswith("http") else "https://gis.hcpafl.org" + href
+                    break
 
         if not parcel_url:
-            log.debug("No parcel link for: %s (searched: %s)", owner, search_term)
             return empty
 
-        # Load parcel detail page
-        await page.goto(parcel_url, wait_until="domcontentloaded", timeout=30_000)
-        await page.wait_for_timeout(2_000)
+        await page.goto(parcel_url, wait_until="networkidle", timeout=45_000)
+        await page.wait_for_timeout(3_000)
         html = await page.content()
         soup = BeautifulSoup(html, "lxml")
 
         lines = [l.strip() for l in soup.get_text("\n").split("\n") if l.strip()]
-
         mail_addr = mail_city = mail_state = mail_zip = ""
         site_addr = site_city = ""
 
@@ -245,15 +332,14 @@ async def enrich_address(page, owner: str) -> dict:
                 break
 
         if not mail_addr:
-            mail_addr  = site_addr
-            mail_city  = site_city
+            mail_addr = site_addr
+            mail_city = site_city
             mail_state = "FL"
-            mail_zip   = mail_zip
 
         if not site_addr and not mail_addr:
             return empty
 
-        log.info("✓ Address found for %s: %s", owner, site_addr)
+        log.info("✓ %s → %s", owner, site_addr)
         return {
             "prop_address": site_addr,
             "prop_city":    site_city,
@@ -266,7 +352,7 @@ async def enrich_address(page, owner: str) -> dict:
         }
 
     except Exception as e:
-        log.debug("HCPA lookup failed for %s: %s", owner, e)
+        log.debug("Playwright HCPA failed for %s: %s", owner, e)
         return empty
 
 
@@ -377,7 +463,7 @@ async def main():
     date_to_str   = date_to_dt.strftime("%m/%d/%Y")
 
     log.info("=" * 64)
-    log.info("Hillsborough County Motivated Seller Scraper  v21")
+    log.info("Hillsborough County Motivated Seller Scraper  v23")
     log.info("Range  : %s  →  %s  (%d days)", date_from_str, date_to_str, LOOKBACK_DAYS)
     log.info("=" * 64)
 
@@ -416,43 +502,40 @@ async def main():
                     "flags": flags, "score": score,
                 })
 
-        # ── Step 2: Enrich top leads with HCPA addresses ──────────────────────
+        # ── Step 2: Test requests-based HCPA lookup first ────────────────────
         to_enrich = [r for r in all_records if r["score"] >= ENRICH_MIN_SCORE and r.get("owner")]
-        log.info("Enriching %d high-score leads with HCPA addresses...", len(to_enrich))
+        log.info("Enriching %d high-score leads...", len(to_enrich))
 
-        hcpa_page = await ctx.new_page()
-
-        # Test first lookup with screenshot
+        # Test requests approach on first 3 leads
         if to_enrich:
-            test_owner = to_enrich[0]["owner"]
-            test_parts = _norm(test_owner).split()[:2]
-            test_term  = "%20".join(test_parts)
-            test_url   = f"https://gis.hcpafl.org/propertysearch/#/search/basic/owner={test_term}"
-            log.info("Testing HCPA lookup: %s → %s", test_owner, test_url)
-            await hcpa_page.goto(test_url, wait_until="domcontentloaded", timeout=30_000)
-            await hcpa_page.wait_for_timeout(3_000)
-            await hcpa_page.screenshot(path="data/hcpa_test.png", full_page=True)
-            html = await hcpa_page.content()
-            soup = BeautifulSoup(html, "lxml")
-            # Log all table rows found
-            rows = soup.find_all("tr")
-            log.info("HCPA test: found %d table rows", len(rows))
-            for row in rows[:5]:
-                log.info("  ROW: %s", _norm(row.get_text())[:100])
+            log.info("Testing requests-based HCPA lookup...")
+            for test_rec in to_enrich[:3]:
+                result = enrich_address_requests(test_rec["owner"])
+                log.info("Requests test for %s: %s", test_rec["owner"], result)
+
+        # ── Step 3: Use Playwright for HCPA ──────────────────────────────────
+        hcpa_page = await ctx.new_page()
 
         enriched = 0
         for i, rec in enumerate(to_enrich):
             try:
-                addr = await enrich_address(hcpa_page, rec["owner"])
+                # Try requests first (faster)
+                addr = enrich_address_requests(rec["owner"])
+
+                # Fall back to Playwright if requests fails
+                if not addr.get("prop_address") and not addr.get("mail_address"):
+                    addr = await enrich_address_playwright(hcpa_page, rec["owner"])
+
                 if addr.get("prop_address") or addr.get("mail_address"):
                     rec.update(addr)
                     score, flags = score_record(rec)
                     rec["score"] = score
                     rec["flags"] = flags
                     enriched += 1
+
                 if (i + 1) % 10 == 0:
                     log.info("Progress: %d/%d enriched, %d got addresses", i+1, len(to_enrich), enriched)
-                await asyncio.sleep(0.5)
+                await asyncio.sleep(0.3)
             except Exception as e:
                 log.debug("Enrich error for %s: %s", rec.get("owner",""), e)
 
