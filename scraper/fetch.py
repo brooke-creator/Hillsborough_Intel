@@ -1,6 +1,6 @@
 """
-Hillsborough County Motivated Seller Lead Scraper v24
-Address enrichment: county-taxes.net autocomplete API
+Hillsborough County Motivated Seller Lead Scraper v25
+Address enrichment: Algolia API (county-taxes.net search backend)
 """
 
 import asyncio
@@ -28,6 +28,11 @@ except ImportError:
 CLERK_URL  = "https://publicaccess.hillsclerk.com/oripublicaccess/"
 LOOKBACK_DAYS = int(os.getenv("LOOKBACK_DAYS", "7"))
 ENRICH_MIN_SCORE = 70
+
+# Algolia credentials from county-taxes.net
+ALGOLIA_APP_ID  = "0LWZO52LS2"
+ALGOLIA_API_KEY = "c0745578b56854a1b90ed57b63fbf0ba"
+ALGOLIA_URL     = f"https://{ALGOLIA_APP_ID}-dsn.algolia.net/1/indexes/*/queries"
 
 TARGET_TYPES = {
     "LP","NOFC","TAXDEED","JUD","CCJ","DRJUD",
@@ -158,14 +163,11 @@ def _parse_html(html: str) -> list[dict]:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# ADDRESS ENRICHMENT via county-taxes.net autocomplete
+# ADDRESS ENRICHMENT via Algolia API
 # ─────────────────────────────────────────────────────────────────────────────
 
 def enrich_address(owner: str) -> dict:
-    """
-    Use county-taxes.net autocomplete API to find property address.
-    The autocomplete returns owner name + full address in one call.
-    """
+    """Use Algolia API (county-taxes.net backend) to find property address."""
     empty = {
         "prop_address":"","prop_city":"","prop_state":"FL","prop_zip":"",
         "mail_address":"","mail_city":"","mail_state":"FL","mail_zip":""
@@ -175,124 +177,119 @@ def enrich_address(owner: str) -> dict:
         parts = owner_norm.split()
         if not parts: return empty
 
-        # Search using last name + first name (how county records are stored)
-        search_term = " ".join(parts[:2])
+        # Search using owner name
+        search_query = " ".join(parts[:3])
 
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-            "Accept": "application/json",
-            "Referer": "https://county-taxes.net/hillsborough/property-tax",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Content-Type": "application/json",
+            "X-Algolia-Application-Id": ALGOLIA_APP_ID,
+            "X-Algolia-API-Key": ALGOLIA_API_KEY,
+            "Referer": "https://county-taxes.net/",
             "Origin": "https://county-taxes.net",
         }
 
-        # Try the autocomplete API endpoint
-        autocomplete_urls = [
-            f"https://county-taxes.net/hillsborough/property-tax/autocomplete?query={search_term.replace(' ','+')}",
-            f"https://county-taxes.net/api/hillsborough/property-tax/search?q={search_term.replace(' ','+')}",
-            f"https://county-taxes.net/hillsborough/property-tax/search?query={search_term.replace(' ','+')}",
-        ]
+        payload = {
+            "requests": [
+                {
+                    "indexName": "hc_hillsborough_property-tax",
+                    "query": search_query,
+                    "params": "hitsPerPage=5&page=0"
+                }
+            ]
+        }
 
-        for url in autocomplete_urls:
-            try:
-                r = requests.get(url, headers=headers, timeout=10, verify=False)
-                log.debug("Autocomplete %s → status %d, %d bytes", url, r.status_code, len(r.text))
-                if r.status_code == 200 and r.text and len(r.text) > 10:
-                    log.info("Autocomplete hit for %s: %s", owner, r.text[:300])
-                    # Try JSON parse
-                    try:
-                        data = r.json()
-                        if isinstance(data, list) and data:
-                            # Find best match
-                            for item in data:
-                                item_text = _norm(str(item))
-                                if any(p in item_text for p in parts[:1]):
-                                    # Extract address from item
-                                    addr_str = ""
-                                    if isinstance(item, dict):
-                                        addr_str = item.get("address","") or item.get("situs","") or item.get("label","")
-                                    elif isinstance(item, str):
-                                        addr_str = item
-                                    if addr_str:
-                                        return _parse_address_string(addr_str)
-                    except Exception:
-                        pass
-            except Exception:
-                continue
+        r = requests.post(
+            ALGOLIA_URL,
+            headers=headers,
+            json=payload,
+            timeout=10
+        )
 
-        # Try direct page scrape with requests
-        search_url = f"https://county-taxes.net/hillsborough/property-tax?search={search_term.replace(' ','+')}"
-        try:
-            r = requests.get(search_url, headers=headers, timeout=15, verify=False)
-            if r.status_code == 200:
-                soup = BeautifulSoup(r.text, "lxml")
-                # Look for owner name in page
-                page_text = soup.get_text()
-                if owner_norm.split()[0] in page_text.upper():
-                    log.info("Found owner on search page for %s", owner)
-                    # Try to extract address
-                    lines = [l.strip() for l in page_text.split("\n") if l.strip()]
-                    for i, line in enumerate(lines):
-                        if parts[0] in _norm(line):
-                            # Look for address pattern nearby
-                            for j in range(max(0,i-2), min(len(lines), i+3)):
-                                addr_match = re.search(r"\d+\s+[A-Z].*(?:DR|ST|AVE|RD|LN|CT|WAY|BLVD|PL|TER|CIR)", lines[j].upper())
-                                if addr_match:
-                                    return _parse_address_string(lines[j])
-        except Exception as e:
-            log.debug("Direct scrape failed: %s", e)
+        if r.status_code != 200:
+            log.debug("Algolia status %d for %s", r.status_code, owner)
+            return empty
 
-        return empty
+        data = r.json()
+        results = data.get("results", [])
+        if not results: return empty
+
+        hits = results[0].get("hits", [])
+        if not hits: return empty
+
+        log.debug("Algolia hits for %s: %d results", owner, len(hits))
+
+        # Find best matching hit
+        best_hit = None
+        for hit in hits:
+            hit_str = json.dumps(hit).upper()
+            if any(p in hit_str for p in parts[:1]):
+                best_hit = hit
+                break
+
+        if not best_hit:
+            best_hit = hits[0]  # Take first result
+
+        log.info("Algolia hit for %s: %s", owner, json.dumps(best_hit)[:300])
+
+        # Extract address from hit
+        # Try common field names
+        site_addr = (
+            best_hit.get("situs_address") or
+            best_hit.get("situs") or
+            best_hit.get("site_address") or
+            best_hit.get("property_address") or
+            best_hit.get("address") or
+            best_hit.get("location") or ""
+        )
+        site_city = (
+            best_hit.get("situs_city") or
+            best_hit.get("city") or
+            best_hit.get("situs_city_state") or
+            "TAMPA"
+        )
+        site_zip = (
+            best_hit.get("situs_zip") or
+            best_hit.get("zip") or
+            best_hit.get("zip_code") or ""
+        )
+        mail_addr = (
+            best_hit.get("mailing_address") or
+            best_hit.get("owner_address") or
+            site_addr
+        )
+        mail_city = best_hit.get("mailing_city") or site_city
+        mail_zip  = best_hit.get("mailing_zip") or site_zip
+
+        # If address not found in top level, check nested
+        if not site_addr:
+            # Look for address pattern in any string field
+            for key, val in best_hit.items():
+                if isinstance(val, str):
+                    m = re.search(r"\d+\s+[A-Z].*(?:DR|ST|AVE|RD|LN|CT|WAY|BLVD|PL|TER|CIR|LOOP|PASS|TRL)", val.upper())
+                    if m:
+                        site_addr = val
+                        break
+
+        if not site_addr:
+            log.debug("No address in Algolia hit for %s: %s", owner, list(best_hit.keys()))
+            return empty
+
+        log.info("✓ %s → %s, %s %s", owner, site_addr, site_city, site_zip)
+        return {
+            "prop_address": site_addr.upper(),
+            "prop_city":    site_city.upper(),
+            "prop_state":   "FL",
+            "prop_zip":     str(site_zip),
+            "mail_address": (mail_addr or site_addr).upper(),
+            "mail_city":    (mail_city or site_city).upper(),
+            "mail_state":   "FL",
+            "mail_zip":     str(mail_zip or site_zip),
+        }
 
     except Exception as e:
-        log.debug("Enrichment failed for %s: %s", owner, e)
+        log.debug("Algolia lookup failed for %s: %s", owner, e)
         return empty
-
-
-def _parse_address_string(addr_str: str) -> dict:
-    """Parse an address string like '4901 LONDONDERRY DR, TAMPA, FL 33647-1333'"""
-    empty = {
-        "prop_address":"","prop_city":"","prop_state":"FL","prop_zip":"",
-        "mail_address":"","mail_city":"","mail_state":"FL","mail_zip":""
-    }
-    try:
-        addr_str = addr_str.strip()
-        # Pattern: street, city, state zip
-        m = re.match(r"(.+?),\s*([^,]+?),\s*([A-Z]{2})\s+([\d\-]+)", addr_str)
-        if m:
-            street = m.group(1).strip()
-            city   = m.group(2).strip()
-            state  = m.group(3).strip()
-            zip_   = m.group(4).strip()
-            return {
-                "prop_address": street,
-                "prop_city":    city,
-                "prop_state":   state,
-                "prop_zip":     zip_,
-                "mail_address": street,
-                "mail_city":    city,
-                "mail_state":   state,
-                "mail_zip":     zip_,
-            }
-        # Try simpler pattern: street, city state zip
-        m2 = re.match(r"(.+?),\s*([^,]+?\s+[A-Z]{2}\s+[\d\-]+)", addr_str)
-        if m2:
-            street = m2.group(1).strip()
-            rest = m2.group(2).strip()
-            m3 = re.match(r"(.+?)\s+([A-Z]{2})\s+([\d\-]+)", rest)
-            if m3:
-                return {
-                    "prop_address": street,
-                    "prop_city":    m3.group(1).strip(),
-                    "prop_state":   m3.group(2).strip(),
-                    "prop_zip":     m3.group(3).strip(),
-                    "mail_address": street,
-                    "mail_city":    m3.group(1).strip(),
-                    "mail_state":   m3.group(2).strip(),
-                    "mail_zip":     m3.group(3).strip(),
-                }
-    except Exception:
-        pass
-    return empty
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -402,7 +399,7 @@ async def main():
     date_to_str   = date_to_dt.strftime("%m/%d/%Y")
 
     log.info("=" * 64)
-    log.info("Hillsborough County Motivated Seller Scraper  v24")
+    log.info("Hillsborough County Motivated Seller Scraper  v25")
     log.info("Range  : %s  →  %s  (%d days)", date_from_str, date_to_str, LOOKBACK_DAYS)
     log.info("=" * 64)
 
@@ -443,16 +440,16 @@ async def main():
 
         await browser.close()
 
-    # ── Step 2: Enrich with county-taxes.net (no browser needed!) ────────────
+    # ── Step 2: Enrich with Algolia API ───────────────────────────────────────
     to_enrich = [r for r in all_records if r["score"] >= ENRICH_MIN_SCORE and r.get("owner")]
-    log.info("Enriching %d high-score leads via county-taxes.net...", len(to_enrich))
+    log.info("Enriching %d high-score leads via Algolia API...", len(to_enrich))
 
-    # Test first 3 leads
+    # Test first 3
     if to_enrich:
-        log.info("--- Testing address enrichment ---")
+        log.info("--- Testing Algolia enrichment ---")
         for test_rec in to_enrich[:3]:
             result = enrich_address(test_rec["owner"])
-            log.info("Test [%s] → %s", test_rec["owner"], result)
+            log.info("Test [%s] → %s", test_rec["owner"][:50], result)
 
     enriched = 0
     for i, rec in enumerate(to_enrich):
@@ -467,7 +464,7 @@ async def main():
             if (i + 1) % 20 == 0:
                 log.info("Progress: %d/%d enriched, %d got addresses", i+1, len(to_enrich), enriched)
             import time
-            time.sleep(0.2)
+            time.sleep(0.1)
         except Exception as e:
             log.debug("Enrich error for %s: %s", rec.get("owner",""), e)
 
