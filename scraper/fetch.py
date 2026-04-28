@@ -1,6 +1,6 @@
 """
-Hillsborough County Motivated Seller Lead Scraper v25
-Address enrichment: Algolia API (county-taxes.net search backend)
+Hillsborough County Motivated Seller Lead Scraper v26
+Address enrichment: Algolia → parcel detail API
 """
 
 import asyncio
@@ -29,10 +29,10 @@ CLERK_URL  = "https://publicaccess.hillsclerk.com/oripublicaccess/"
 LOOKBACK_DAYS = int(os.getenv("LOOKBACK_DAYS", "7"))
 ENRICH_MIN_SCORE = 70
 
-# Algolia credentials from county-taxes.net
 ALGOLIA_APP_ID  = "0LWZO52LS2"
 ALGOLIA_API_KEY = "c0745578b56854a1b90ed57b63fbf0ba"
 ALGOLIA_URL     = f"https://{ALGOLIA_APP_ID}-dsn.algolia.net/1/indexes/*/queries"
+COUNTY_TAXES    = "https://county-taxes.net"
 
 TARGET_TYPES = {
     "LP","NOFC","TAXDEED","JUD","CCJ","DRJUD",
@@ -163,11 +163,121 @@ def _parse_html(html: str) -> list[dict]:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# ADDRESS ENRICHMENT via Algolia API
+# ADDRESS ENRICHMENT
 # ─────────────────────────────────────────────────────────────────────────────
 
+def fetch_parcel_detail(public_url: str) -> dict:
+    """Fetch parcel detail page from county-taxes.net and extract addresses."""
+    empty = {
+        "prop_address":"","prop_city":"","prop_state":"FL","prop_zip":"",
+        "mail_address":"","mail_city":"","mail_state":"FL","mail_zip":""
+    }
+    try:
+        # Convert public URL to API URL
+        # /public/real_estate/parcels/A0159087918/bills → API endpoint
+        # Try the JSON API endpoint
+        api_url = f"{COUNTY_TAXES}{public_url.split('?')[0].replace('/bills','')}"
+
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Accept": "application/json",
+            "Referer": "https://county-taxes.net/hillsborough/property-tax",
+        }
+
+        # Try JSON API
+        r = requests.get(api_url, headers=headers, timeout=10)
+        if r.status_code == 200:
+            try:
+                data = r.json()
+                log.debug("Parcel API response keys: %s", list(data.keys()) if isinstance(data, dict) else type(data))
+
+                if isinstance(data, dict):
+                    # Extract situs/property address
+                    situs = (
+                        data.get("situs_address") or
+                        data.get("situs") or
+                        data.get("site_address") or
+                        data.get("location") or
+                        data.get("address") or ""
+                    )
+                    situs_city = data.get("situs_city") or data.get("city") or "TAMPA"
+                    situs_zip  = data.get("situs_zip")  or data.get("zip")  or ""
+
+                    mail_addr  = data.get("mailing_address") or data.get("owner_address") or situs
+                    mail_city  = data.get("mailing_city")    or situs_city
+                    mail_state = data.get("mailing_state")   or "FL"
+                    mail_zip   = data.get("mailing_zip")     or situs_zip
+
+                    # Check nested structures
+                    if not situs and "parcel" in data:
+                        p = data["parcel"]
+                        situs      = p.get("situs_address") or p.get("situs") or ""
+                        situs_city = p.get("situs_city") or "TAMPA"
+                        situs_zip  = p.get("situs_zip") or ""
+
+                    if not situs and "account" in data:
+                        a = data["account"]
+                        situs      = a.get("situs_address") or a.get("situs") or ""
+                        situs_city = a.get("situs_city") or "TAMPA"
+                        situs_zip  = a.get("situs_zip") or ""
+
+                    if situs:
+                        log.info("Parcel API address: %s, %s %s", situs, situs_city, situs_zip)
+                        return {
+                            "prop_address": str(situs).upper(),
+                            "prop_city":    str(situs_city).upper(),
+                            "prop_state":   "FL",
+                            "prop_zip":     str(situs_zip),
+                            "mail_address": str(mail_addr).upper(),
+                            "mail_city":    str(mail_city).upper(),
+                            "mail_state":   str(mail_state).upper(),
+                            "mail_zip":     str(mail_zip),
+                        }
+
+                    # Log full response for debugging
+                    log.info("Parcel API full response: %s", json.dumps(data)[:500])
+
+            except Exception as e:
+                log.debug("JSON parse error: %s", e)
+                # Try HTML parse
+                soup = BeautifulSoup(r.text, "lxml")
+                text = soup.get_text("\n", strip=True)
+                lines = [l.strip() for l in text.split("\n") if l.strip()]
+
+                # Look for situs/address in page
+                for i, line in enumerate(lines):
+                    if any(kw in line.upper() for kw in ["SITUS", "SITE ADDRESS", "PROPERTY ADDRESS"]):
+                        if i + 1 < len(lines):
+                            addr = lines[i+1]
+                            if re.search(r"\d+\s+\w", addr):
+                                log.info("HTML address found: %s", addr)
+                                # Parse city/zip from next lines
+                                city = zip_ = ""
+                                for j in range(i+2, min(i+5, len(lines))):
+                                    m = re.match(r"([A-Z\s]+),?\s*FL\s*([\d\-]+)", lines[j].upper())
+                                    if m:
+                                        city = m.group(1).strip()
+                                        zip_ = m.group(2).strip()
+                                        break
+                                return {
+                                    "prop_address": addr.upper(),
+                                    "prop_city":    city or "TAMPA",
+                                    "prop_state":   "FL",
+                                    "prop_zip":     zip_,
+                                    "mail_address": addr.upper(),
+                                    "mail_city":    city or "TAMPA",
+                                    "mail_state":   "FL",
+                                    "mail_zip":     zip_,
+                                }
+
+        return empty
+    except Exception as e:
+        log.debug("Parcel detail error: %s", e)
+        return empty
+
+
 def enrich_address(owner: str) -> dict:
-    """Use Algolia API (county-taxes.net backend) to find property address."""
+    """Use Algolia to find parcel, then fetch address from parcel detail."""
     empty = {
         "prop_address":"","prop_city":"","prop_state":"FL","prop_zip":"",
         "mail_address":"","mail_city":"","mail_state":"FL","mail_zip":""
@@ -177,7 +287,6 @@ def enrich_address(owner: str) -> dict:
         parts = owner_norm.split()
         if not parts: return empty
 
-        # Search using owner name
         search_query = " ".join(parts[:3])
 
         headers = {
@@ -190,34 +299,19 @@ def enrich_address(owner: str) -> dict:
         }
 
         payload = {
-            "requests": [
-                {
-                   "indexName": "fl-hillsborough.property_tax",
-                    "query": search_query,
-                    "params": "hitsPerPage=5&page=0"
-                }
-            ]
+            "requests": [{
+                "indexName": "fl-hillsborough.property_tax",
+                "query": search_query,
+                "params": "hitsPerPage=5&page=0"
+            }]
         }
 
-        r = requests.post(
-            ALGOLIA_URL,
-            headers=headers,
-            json=payload,
-            timeout=10
-        )
-
-        if r.status_code != 200:
-            log.debug("Algolia status %d for %s", r.status_code, owner)
-            return empty
+        r = requests.post(ALGOLIA_URL, headers=headers, json=payload, timeout=10)
+        if r.status_code != 200: return empty
 
         data = r.json()
-        results = data.get("results", [])
-        if not results: return empty
-
-        hits = results[0].get("hits", [])
+        hits = data.get("results", [{}])[0].get("hits", [])
         if not hits: return empty
-
-        log.debug("Algolia hits for %s: %d results", owner, len(hits))
 
         # Find best matching hit
         best_hit = None
@@ -226,69 +320,36 @@ def enrich_address(owner: str) -> dict:
             if any(p in hit_str for p in parts[:1]):
                 best_hit = hit
                 break
-
         if not best_hit:
-            best_hit = hits[0]  # Take first result
+            best_hit = hits[0]
 
-        log.info("Algolia hit for %s: %s", owner, json.dumps(best_hit)[:300])
+        # Get public_url from hit
+        custom = best_hit.get("custom_parameters", {})
+        public_url = custom.get("public_url", "")
 
-        # Extract address from hit
-        # Try common field names
-        site_addr = (
-            best_hit.get("situs_address") or
-            best_hit.get("situs") or
-            best_hit.get("site_address") or
-            best_hit.get("property_address") or
-            best_hit.get("address") or
-            best_hit.get("location") or ""
-        )
-        site_city = (
-            best_hit.get("situs_city") or
-            best_hit.get("city") or
-            best_hit.get("situs_city_state") or
-            "TAMPA"
-        )
-        site_zip = (
-            best_hit.get("situs_zip") or
-            best_hit.get("zip") or
-            best_hit.get("zip_code") or ""
-        )
-        mail_addr = (
-            best_hit.get("mailing_address") or
-            best_hit.get("owner_address") or
-            site_addr
-        )
-        mail_city = best_hit.get("mailing_city") or site_city
-        mail_zip  = best_hit.get("mailing_zip") or site_zip
+        if not public_url:
+            # Try child_groups
+            child_groups = best_hit.get("child_groups", [])
+            if child_groups:
+                children = child_groups[0].get("children", [])
+                if children:
+                    child_custom = children[0].get("custom_parameters", {})
+                    public_url = child_custom.get("public_url", "")
 
-        # If address not found in top level, check nested
-        if not site_addr:
-            # Look for address pattern in any string field
-            for key, val in best_hit.items():
-                if isinstance(val, str):
-                    m = re.search(r"\d+\s+[A-Z].*(?:DR|ST|AVE|RD|LN|CT|WAY|BLVD|PL|TER|CIR|LOOP|PASS|TRL)", val.upper())
-                    if m:
-                        site_addr = val
-                        break
-
-        if not site_addr:
-            log.debug("No address in Algolia hit for %s: %s", owner, list(best_hit.keys()))
+        if not public_url:
+            log.debug("No public_url for %s", owner)
             return empty
 
-        log.info("✓ %s → %s, %s %s", owner, site_addr, site_city, site_zip)
-        return {
-            "prop_address": site_addr.upper(),
-            "prop_city":    site_city.upper(),
-            "prop_state":   "FL",
-            "prop_zip":     str(site_zip),
-            "mail_address": (mail_addr or site_addr).upper(),
-            "mail_city":    (mail_city or site_city).upper(),
-            "mail_state":   "FL",
-            "mail_zip":     str(mail_zip or site_zip),
-        }
+        log.debug("Fetching parcel: %s", public_url)
+
+        # Fetch parcel detail to get address
+        addr = fetch_parcel_detail(public_url)
+        if addr.get("prop_address"):
+            log.info("✓ %s → %s, %s", owner, addr["prop_address"], addr["prop_city"])
+        return addr
 
     except Exception as e:
-        log.debug("Algolia lookup failed for %s: %s", owner, e)
+        log.debug("Enrich failed for %s: %s", owner, e)
         return empty
 
 
@@ -399,7 +460,7 @@ async def main():
     date_to_str   = date_to_dt.strftime("%m/%d/%Y")
 
     log.info("=" * 64)
-    log.info("Hillsborough County Motivated Seller Scraper  v25")
+    log.info("Hillsborough County Motivated Seller Scraper  v26")
     log.info("Range  : %s  →  %s  (%d days)", date_from_str, date_to_str, LOOKBACK_DAYS)
     log.info("=" * 64)
 
@@ -419,7 +480,6 @@ async def main():
         clerk_page = await ctx.new_page()
         Path("data").mkdir(exist_ok=True)
 
-        # ── Step 1: Scrape all doc types ──────────────────────────────────────
         for doc_code, (cat, cat_label) in DOC_TYPE_MAP.items():
             log.info("── Fetching [%s] %s", doc_code, cat_label)
             raw = await scrape_one_doc_type(clerk_page, doc_code, date_from_str, date_to_str)
@@ -440,13 +500,13 @@ async def main():
 
         await browser.close()
 
-    # ── Step 2: Enrich with Algolia API ───────────────────────────────────────
+    # Enrich with Algolia + parcel detail
     to_enrich = [r for r in all_records if r["score"] >= ENRICH_MIN_SCORE and r.get("owner")]
-    log.info("Enriching %d high-score leads via Algolia API...", len(to_enrich))
+    log.info("Enriching %d high-score leads...", len(to_enrich))
 
     # Test first 3
     if to_enrich:
-        log.info("--- Testing Algolia enrichment ---")
+        log.info("--- Testing enrichment ---")
         for test_rec in to_enrich[:3]:
             result = enrich_address(test_rec["owner"])
             log.info("Test [%s] → %s", test_rec["owner"][:50], result)
