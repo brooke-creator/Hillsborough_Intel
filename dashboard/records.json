@@ -1,5 +1,5 @@
 {
-  "fetched_at": "2026-04-28T00:23:08.479332Z",
+  "fetched_at": "2026-04-28T01:27:50.332181Z",
   "source": "Hillsborough County Clerk of Courts",
   "date_range": {
     "from": "04/21/2026",
@@ -7,7 +7,7 @@
   },
   "lookback_days": 7,
   "total": 2791,
-  "with_address": 1,
+  "with_address": 0,
   "records": [
     {
       "doc_num": "2026161944",
@@ -1414,32 +1414,6 @@
       "score": 85
     },
     {
-      "doc_num": "2026156460",
-      "doc_type": "LP",
-      "filed": "2026-04-23",
-      "cat": "foreclosure",
-      "cat_label": "Lis Pendens",
-      "owner": "BANKUNITED, N.A.",
-      "grantee": "HOLGUIN ANA",
-      "amount": null,
-      "legal": "",
-      "prop_address": "BANKUNITED NA #2458\nRICHARD CAMPBELL",
-      "prop_city": "TAMPA",
-      "prop_state": "FL",
-      "prop_zip": "",
-      "mail_address": "BANKUNITED NA #2458\nRICHARD CAMPBELL",
-      "mail_city": "TAMPA",
-      "mail_state": "FL",
-      "mail_zip": "",
-      "clerk_url": "https://publicaccess.hillsclerk.comjavascript:;",
-      "flags": [
-        "Lis pendens",
-        "Pre-foreclosure",
-        "New this week"
-      ],
-      "score": 80
-    },
-    {
       "doc_num": "2026161856",
       "doc_type": "LP",
       "filed": "2026-04-27",
@@ -1837,6 +1811,32 @@
       "cat_label": "Lis Pendens",
       "owner": "RHOADS ANTHONY",
       "grantee": "MELTON NICOLE D",
+      "amount": null,
+      "legal": "",
+      "prop_address": "",
+      "prop_city": "",
+      "prop_state": "FL",
+      "prop_zip": "",
+      "mail_address": "",
+      "mail_city": "",
+      "mail_state": "FL",
+      "mail_zip": "",
+      "clerk_url": "https://publicaccess.hillsclerk.comjavascript:;",
+      "flags": [
+        "Lis pendens",
+        "Pre-foreclosure",
+        "New this week"
+      ],
+      "score": 75
+    },
+    {
+      "doc_num": "2026156460",
+      "doc_type": "LP",
+      "filed": "2026-04-23",
+      "cat": "foreclosure",
+      "cat_label": "Lis Pendens",
+      "owner": "BANKUNITED, N.A.",
+      "grantee": "HOLGUIN ANA",
       "amount": null,
       "legal": "",
       "prop_address": "",
