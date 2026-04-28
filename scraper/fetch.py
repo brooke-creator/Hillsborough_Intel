@@ -192,7 +192,7 @@ def enrich_address(owner: str) -> dict:
         payload = {
             "requests": [
                 {
-                    "indexName": "hc_hillsborough_property-tax",
+                   "indexName": "fl-hillsborough.property_tax",
                     "query": search_query,
                     "params": "hitsPerPage=5&page=0"
                 }
