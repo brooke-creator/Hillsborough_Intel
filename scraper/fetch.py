@@ -1,6 +1,6 @@
 """
-Hillsborough County Motivated Seller Lead Scraper v26
-Address enrichment: Algolia → parcel detail API
+Hillsborough County Motivated Seller Lead Scraper v27
+Fix: Look up GRANTEE (homeowner) not GRANTOR (bank) for address enrichment
 """
 
 import asyncio
@@ -59,6 +59,9 @@ DOC_TYPE_MAP = {
     "RELLP":    ("release",      "Release Lis Pendens"),
 }
 
+# For these doc types the GRANTEE is the property owner, not the grantor
+GRANTEE_IS_OWNER = {"LP", "NOFC", "TAXDEED", "LNHOA", "LNMECH", "LNCORPTX", "LNIRS", "LNFED", "MEDLN"}
+
 OUTPUT_PATHS = [Path("dashboard/records.json"), Path("data/records.json")]
 GHL_CSV_PATH = Path("data/ghl_export.csv")
 
@@ -82,6 +85,17 @@ def _split_name(full: str):
     if not parts: return "", ""
     if len(parts) == 1: return "", parts[0]
     return " ".join(parts[1:]), parts[0]
+
+def _is_institution(name: str) -> bool:
+    """Returns True if name looks like a bank/institution not a person."""
+    n = _norm(name)
+    keywords = ["BANK", "MORTGAGE", "LOAN", "LENDING", "FINANCIAL", "TRUST",
+                "ASSOCIATION", "HOA", "LLC", "INC", "CORP", "SERVICES",
+                "NATIONAL", "FEDERAL", "PENNYMAC", "NEWREZ", "ROCKET",
+                "SHELLPOINT", "CARRINGTON", "LAKEVIEW", "REGIONS", "TRUIST",
+                "WELLS FARGO", "MIDFIRST", "FLAGSTAR", "PLANET HOME",
+                "CROSSCOUNTRY", "NATIONSTAR", "HABITAT", "CLICK N"]
+    return any(k in n for k in keywords)
 
 def score_record(rec: dict):
     flags, s = [], 30
@@ -166,129 +180,9 @@ def _parse_html(html: str) -> list[dict]:
 # ADDRESS ENRICHMENT
 # ─────────────────────────────────────────────────────────────────────────────
 
-def fetch_parcel_detail(public_url: str) -> dict:
-    """Fetch parcel detail page from county-taxes.net and extract addresses."""
-    empty = {
-        "prop_address":"","prop_city":"","prop_state":"FL","prop_zip":"",
-        "mail_address":"","mail_city":"","mail_state":"FL","mail_zip":""
-    }
+def algolia_search(query: str) -> list[dict]:
+    """Search Algolia and return hits."""
     try:
-        # Convert public URL to API URL
-        # /public/real_estate/parcels/A0159087918/bills → API endpoint
-        # Try the JSON API endpoint
-        api_url = f"{COUNTY_TAXES}{public_url.split('?')[0].replace('/bills','')}"
-
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            "Accept": "application/json",
-            "Referer": "https://county-taxes.net/hillsborough/property-tax",
-        }
-
-        # Try JSON API
-        r = requests.get(api_url, headers=headers, timeout=10)
-        if r.status_code == 200:
-            try:
-                data = r.json()
-                log.debug("Parcel API response keys: %s", list(data.keys()) if isinstance(data, dict) else type(data))
-
-                if isinstance(data, dict):
-                    # Extract situs/property address
-                    situs = (
-                        data.get("situs_address") or
-                        data.get("situs") or
-                        data.get("site_address") or
-                        data.get("location") or
-                        data.get("address") or ""
-                    )
-                    situs_city = data.get("situs_city") or data.get("city") or "TAMPA"
-                    situs_zip  = data.get("situs_zip")  or data.get("zip")  or ""
-
-                    mail_addr  = data.get("mailing_address") or data.get("owner_address") or situs
-                    mail_city  = data.get("mailing_city")    or situs_city
-                    mail_state = data.get("mailing_state")   or "FL"
-                    mail_zip   = data.get("mailing_zip")     or situs_zip
-
-                    # Check nested structures
-                    if not situs and "parcel" in data:
-                        p = data["parcel"]
-                        situs      = p.get("situs_address") or p.get("situs") or ""
-                        situs_city = p.get("situs_city") or "TAMPA"
-                        situs_zip  = p.get("situs_zip") or ""
-
-                    if not situs and "account" in data:
-                        a = data["account"]
-                        situs      = a.get("situs_address") or a.get("situs") or ""
-                        situs_city = a.get("situs_city") or "TAMPA"
-                        situs_zip  = a.get("situs_zip") or ""
-
-                    if situs:
-                        log.info("Parcel API address: %s, %s %s", situs, situs_city, situs_zip)
-                        return {
-                            "prop_address": str(situs).upper(),
-                            "prop_city":    str(situs_city).upper(),
-                            "prop_state":   "FL",
-                            "prop_zip":     str(situs_zip),
-                            "mail_address": str(mail_addr).upper(),
-                            "mail_city":    str(mail_city).upper(),
-                            "mail_state":   str(mail_state).upper(),
-                            "mail_zip":     str(mail_zip),
-                        }
-
-                    # Log full response for debugging
-                    log.info("Parcel API full response: %s", json.dumps(data)[:500])
-
-            except Exception as e:
-                log.debug("JSON parse error: %s", e)
-                # Try HTML parse
-                soup = BeautifulSoup(r.text, "lxml")
-                text = soup.get_text("\n", strip=True)
-                lines = [l.strip() for l in text.split("\n") if l.strip()]
-
-                # Look for situs/address in page
-                for i, line in enumerate(lines):
-                    if any(kw in line.upper() for kw in ["SITUS", "SITE ADDRESS", "PROPERTY ADDRESS"]):
-                        if i + 1 < len(lines):
-                            addr = lines[i+1]
-                            if re.search(r"\d+\s+\w", addr):
-                                log.info("HTML address found: %s", addr)
-                                # Parse city/zip from next lines
-                                city = zip_ = ""
-                                for j in range(i+2, min(i+5, len(lines))):
-                                    m = re.match(r"([A-Z\s]+),?\s*FL\s*([\d\-]+)", lines[j].upper())
-                                    if m:
-                                        city = m.group(1).strip()
-                                        zip_ = m.group(2).strip()
-                                        break
-                                return {
-                                    "prop_address": addr.upper(),
-                                    "prop_city":    city or "TAMPA",
-                                    "prop_state":   "FL",
-                                    "prop_zip":     zip_,
-                                    "mail_address": addr.upper(),
-                                    "mail_city":    city or "TAMPA",
-                                    "mail_state":   "FL",
-                                    "mail_zip":     zip_,
-                                }
-
-        return empty
-    except Exception as e:
-        log.debug("Parcel detail error: %s", e)
-        return empty
-
-
-def enrich_address(owner: str) -> dict:
-    """Use Algolia to find parcel, then fetch address from parcel detail."""
-    empty = {
-        "prop_address":"","prop_city":"","prop_state":"FL","prop_zip":"",
-        "mail_address":"","mail_city":"","mail_state":"FL","mail_zip":""
-    }
-    try:
-        owner_norm = _norm(owner)
-        parts = owner_norm.split()
-        if not parts: return empty
-
-        search_query = " ".join(parts[:3])
-
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
             "Content-Type": "application/json",
@@ -297,60 +191,154 @@ def enrich_address(owner: str) -> dict:
             "Referer": "https://county-taxes.net/",
             "Origin": "https://county-taxes.net",
         }
-
         payload = {
             "requests": [{
                 "indexName": "fl-hillsborough.property_tax",
-                "query": search_query,
+                "query": query,
                 "params": "hitsPerPage=5&page=0"
             }]
         }
-
         r = requests.post(ALGOLIA_URL, headers=headers, json=payload, timeout=10)
-        if r.status_code != 200: return empty
+        if r.status_code == 200:
+            return r.json().get("results", [{}])[0].get("hits", [])
+    except Exception as e:
+        log.debug("Algolia error: %s", e)
+    return []
 
-        data = r.json()
-        hits = data.get("results", [{}])[0].get("hits", [])
-        if not hits: return empty
+
+def extract_address_from_hit(hit: dict) -> dict:
+    """Extract address from Algolia hit — check all fields including nested."""
+    empty = {
+        "prop_address":"","prop_city":"","prop_state":"FL","prop_zip":"",
+        "mail_address":"","mail_city":"","mail_state":"FL","mail_zip":""
+    }
+
+    # Flatten all string values from the hit
+    all_text = json.dumps(hit)
+
+    # Log the full hit for first few calls
+    log.debug("Hit keys: %s", list(hit.keys()))
+    log.debug("Hit sample: %s", all_text[:400])
+
+    # Look for address pattern in any field
+    addr_match = re.search(
+        r'"([^"]*\d+\s+[A-Z][^"]*(?:DR|ST|AVE|RD|LN|CT|WAY|BLVD|PL|TER|CIR|LOOP|PASS|TRL|HWY|PKWY)[^"]*)"',
+        all_text.upper()
+    )
+    if addr_match:
+        addr_str = addr_match.group(1).strip()
+        log.debug("Found addr pattern: %s", addr_str)
+
+    # Check specific field names
+    situs = ""
+    city  = "TAMPA"
+    zip_  = ""
+
+    for key in ["situs", "situs_address", "site_address", "property_address",
+                "address", "location", "street", "situs_street"]:
+        val = hit.get(key, "")
+        if val and re.search(r"\d+\s+\w", str(val)):
+            situs = str(val).upper()
+            break
+
+    for key in ["situs_city", "city", "situs_city_state"]:
+        val = hit.get(key, "")
+        if val:
+            city = str(val).upper()
+            break
+
+    for key in ["situs_zip", "zip", "zip_code", "situs_zip_code"]:
+        val = hit.get(key, "")
+        if val:
+            zip_ = str(val)
+            break
+
+    # Check objectID — sometimes it contains address info
+    obj_id = hit.get("objectID", "")
+    log.debug("objectID: %s", obj_id)
+
+    # Check _highlightResult
+    highlight = hit.get("_highlightResult", {})
+    for key, val in highlight.items():
+        if isinstance(val, dict) and "value" in val:
+            v = val["value"]
+            if re.search(r"\d+\s+[A-Z].*(?:DR|ST|AVE|RD|LN|CT|WAY|BLVD)", v.upper()):
+                situs = re.sub(r'<[^>]+>', '', v).upper().strip()
+                log.debug("Found in highlight: %s", situs)
+                break
+
+    if situs:
+        return {
+            "prop_address": situs,
+            "prop_city":    city,
+            "prop_state":   "FL",
+            "prop_zip":     zip_,
+            "mail_address": situs,
+            "mail_city":    city,
+            "mail_state":   "FL",
+            "mail_zip":     zip_,
+        }
+
+    return empty
+
+
+def enrich_address(rec: dict) -> dict:
+    """
+    Look up property address using Algolia.
+    For LP/foreclosure: use grantee (homeowner), not grantor (bank).
+    """
+    empty = {
+        "prop_address":"","prop_city":"","prop_state":"FL","prop_zip":"",
+        "mail_address":"","mail_city":"","mail_state":"FL","mail_zip":""
+    }
+
+    doc_type = rec.get("doc_type","")
+    owner    = rec.get("owner","")
+    grantee  = rec.get("grantee","")
+
+    # Decide which name to look up
+    # For LP/foreclosure: grantee is the homeowner
+    # For judgments/liens: owner is the debtor
+    lookup_name = owner
+    if doc_type in GRANTEE_IS_OWNER and grantee and not _is_institution(grantee):
+        lookup_name = grantee
+        log.debug("Using grantee for %s: %s", doc_type, grantee)
+    elif _is_institution(owner) and grantee and not _is_institution(grantee):
+        lookup_name = grantee
+        log.debug("Owner is institution, using grantee: %s", grantee)
+
+    if not lookup_name:
+        return empty
+
+    lookup_norm = _norm(lookup_name)
+    parts = lookup_norm.split()
+    if not parts: return empty
+
+    # Try full name first, then last name only
+    queries = [
+        " ".join(parts[:3]),
+        " ".join(parts[:2]),
+        parts[0],
+    ]
+
+    for query in queries:
+        hits = algolia_search(query)
+        if not hits: continue
 
         # Find best matching hit
-        best_hit = None
         for hit in hits:
-            hit_str = json.dumps(hit).upper()
-            if any(p in hit_str for p in parts[:1]):
-                best_hit = hit
-                break
-        if not best_hit:
-            best_hit = hits[0]
+            hit_str = _norm(json.dumps(hit))
+            if any(p in hit_str for p in parts[:2]):
+                addr = extract_address_from_hit(hit)
+                if addr.get("prop_address"):
+                    return addr
 
-        # Get public_url from hit
-        custom = best_hit.get("custom_parameters", {})
-        public_url = custom.get("public_url", "")
-
-        if not public_url:
-            # Try child_groups
-            child_groups = best_hit.get("child_groups", [])
-            if child_groups:
-                children = child_groups[0].get("children", [])
-                if children:
-                    child_custom = children[0].get("custom_parameters", {})
-                    public_url = child_custom.get("public_url", "")
-
-        if not public_url:
-            log.debug("No public_url for %s", owner)
-            return empty
-
-        log.debug("Fetching parcel: %s", public_url)
-
-        # Fetch parcel detail to get address
-        addr = fetch_parcel_detail(public_url)
+        # Try first hit anyway
+        addr = extract_address_from_hit(hits[0])
         if addr.get("prop_address"):
-            log.info("✓ %s → %s, %s", owner, addr["prop_address"], addr["prop_city"])
-        return addr
+            return addr
 
-    except Exception as e:
-        log.debug("Enrich failed for %s: %s", owner, e)
-        return empty
+    return empty
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -460,7 +448,7 @@ async def main():
     date_to_str   = date_to_dt.strftime("%m/%d/%Y")
 
     log.info("=" * 64)
-    log.info("Hillsborough County Motivated Seller Scraper  v26")
+    log.info("Hillsborough County Motivated Seller Scraper  v27")
     log.info("Range  : %s  →  %s  (%d days)", date_from_str, date_to_str, LOOKBACK_DAYS)
     log.info("=" * 64)
 
@@ -500,27 +488,30 @@ async def main():
 
         await browser.close()
 
-    # Enrich with Algolia + parcel detail
+    # Enrich high-score leads
     to_enrich = [r for r in all_records if r["score"] >= ENRICH_MIN_SCORE and r.get("owner")]
     log.info("Enriching %d high-score leads...", len(to_enrich))
 
-    # Test first 3
-    if to_enrich:
-        log.info("--- Testing enrichment ---")
-        for test_rec in to_enrich[:3]:
-            result = enrich_address(test_rec["owner"])
-            log.info("Test [%s] → %s", test_rec["owner"][:50], result)
+    # Log what names we'll be looking up for first 5
+    log.info("--- Sample lookup names ---")
+    for rec in to_enrich[:5]:
+        doc_type = rec.get("doc_type","")
+        owner    = rec.get("owner","")
+        grantee  = rec.get("grantee","")
+        lookup   = grantee if (doc_type in GRANTEE_IS_OWNER and grantee and not _is_institution(grantee)) else owner
+        log.info("  [%s] owner=%s | grantee=%s | lookup=%s", doc_type, owner[:40], grantee[:40], lookup[:40])
 
     enriched = 0
     for i, rec in enumerate(to_enrich):
         try:
-            addr = enrich_address(rec["owner"])
+            addr = enrich_address(rec)
             if addr.get("prop_address") or addr.get("mail_address"):
                 rec.update(addr)
                 score, flags = score_record(rec)
                 rec["score"] = score
                 rec["flags"] = flags
                 enriched += 1
+                log.info("✓ [%d] %s → %s", i+1, rec.get("owner","")[:40], addr["prop_address"])
             if (i + 1) % 20 == 0:
                 log.info("Progress: %d/%d enriched, %d got addresses", i+1, len(to_enrich), enriched)
             import time
