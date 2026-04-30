@@ -1,17 +1,22 @@
 """
-Hillsborough County Motivated Seller Lead Scraper v30
+Hillsborough County Motivated Seller Lead Scraper v31
 Fixes:
-  1. owner field = homeowner (grantee) not the filing institution (grantor)
-  2. Address enrichment: HCPA ArcGIS REST API (no Algolia, no fragile Playwright parcel pages)
-  3. clerk_url: fixed malformed javascript: hrefs
+  1. Clerk dropdown: targets Chosen.js via exact select id OBKey__1285_1
+     Option values are "(LP) LIS PENDENS" not "(LP)" — fixed to match exactly
+  2. Search button: id="sub"
+  3. Date fields: id OBKey__1634_1 / OBKey__1634_2
+  4. HCPA address enrichment: scrapes Downloads/Maps-Data page to find
+     the real bulk DBF/ZIP download URL, then uses dbfread for owner lookup
 """
 
 import asyncio
 import csv
+import io
 import json
 import logging
 import os
 import re
+import zipfile
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -22,16 +27,19 @@ from playwright.async_api import async_playwright, TimeoutError as PWTimeout
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
+try:
+    from dbfread import DBF
+    HAS_DBF = True
+except ImportError:
+    HAS_DBF = False
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Config
 # ─────────────────────────────────────────────────────────────────────────────
 CLERK_URL     = "https://publicaccess.hillsclerk.com/oripublicaccess/"
 LOOKBACK_DAYS = int(os.getenv("LOOKBACK_DAYS", "7"))
 
-# HCPA ArcGIS REST — public, no auth required
-HCPA_API_URL = (
-    "https://gis.hcpafl.org/arcgis/rest/services/HC/HCPAView/MapServer/0/query"
-)
+HCPA_MAPS_DATA_URL = "https://hcpafl.org/Downloads/Maps-Data"
 
 OUTPUT_PATHS = [Path("dashboard/records.json"), Path("data/records.json")]
 GHL_CSV_PATH = Path("data/ghl_export.csv")
@@ -61,8 +69,29 @@ DOC_TYPE_MAP = {
     "RELLP":    ("release",      "Release Lis Pendens"),
 }
 
+# The option value on the clerk site is the full string e.g. "(LP) LIS PENDENS"
+# This maps our short code → the exact option value on the page
+CLERK_OPTION_VALUES = {
+    "LP":       "(LP) LIS PENDENS",
+    "NOFC":     "(NOFC) NOTICE OF FORECLOSURE",
+    "TAXDEED":  "(TAXDEED) TAX DEED",
+    "JUD":      "(JUD) JUDGMENT",
+    "CCJ":      "(CCJ) CERTIFIED COPY OF A COURT JUDGMENT",
+    "DRJUD":    "(DRJUD) DOMESTIC RELATIONS JUDGMENT",
+    "LNCORPTX": "(LNCORPTX) CORP TAX LIEN FOR STATE OF FLORIDA",
+    "LNIRS":    "(LNIRS) IRS LIEN",
+    "LNFED":    "(LNFED) FEDERAL TAX LIEN",
+    "LN":       "(LN) LIEN",
+    "LNMECH":   "(LNMECH) MECHANIC LIEN",
+    "LNHOA":    "(LNHOA) HOA LIEN",
+    "MEDLN":    "(MEDLN) MEDICAID LIEN",
+    "PRO":      "(PRO) PROBATE",
+    "NOC":      "(NOC) NOTICE OF COMMENCEMENT",
+    "RELLP":    "(RELLP) RELEASE LIS PENDENS",
+}
+
 # For these doc types: institution files AGAINST the homeowner
-# → grantee = homeowner, grantor = institution
+# grantee = homeowner, grantor = institution
 GRANTEE_IS_OWNER = {
     "LP","NOFC","TAXDEED","LNHOA","LNMECH",
     "LNCORPTX","LNIRS","LNFED","MEDLN","LN","CCJ","DRJUD","JUD",
@@ -106,18 +135,15 @@ def _norm_date(raw: str) -> str:
     return raw.strip()
 
 def _split_name(full: str):
-    """Return (first, last) from a full name string."""
     n = _norm(full)
     if not n:
         return "", ""
-    # "LAST, FIRST" format
     if "," in n:
         parts = n.split(",", 1)
         return parts[1].strip(), parts[0].strip()
     parts = n.split()
     if len(parts) == 1:
         return "", parts[0]
-    # Clerk stores as "LASTNAME FIRSTNAME" — first token = last name
     return " ".join(parts[1:]), parts[0]
 
 def _is_institution(name: str) -> bool:
@@ -127,28 +153,14 @@ def _is_institution(name: str) -> bool:
     return any(k in n for k in INSTITUTION_KEYWORDS)
 
 def _resolve_owner(doc_type: str, grantor: str, grantee: str) -> str:
-    """
-    Return the property owner (homeowner / motivated seller).
-
-    For LP, NOFC, liens, judgments: the institution files AGAINST the owner,
-    so grantee = owner. Grantor = institution.
-    For NOC, PRO, RELLP: grantor = owner (they filed it themselves).
-    Always skip parties that look like institutions.
-    """
     g1 = _norm(grantor)
     g2 = _norm(grantee)
-
     if doc_type in GRANTEE_IS_OWNER:
-        # Prefer grantee if it's a real person
         if g2 and not _is_institution(g2):
             return g2
-        # Grantee is an institution too — try grantor
         if g1 and not _is_institution(g1):
             return g1
-        # Both institutions — take grantee as fallback
         return g2 or g1
-
-    # NOC / PRO / RELLP — grantor filed it themselves
     if g1 and not _is_institution(g1):
         return g1
     if g2 and not _is_institution(g2):
@@ -156,18 +168,12 @@ def _resolve_owner(doc_type: str, grantor: str, grantee: str) -> str:
     return g1
 
 def _fix_clerk_url(href: str) -> str:
-    """
-    Sanitise clerk hrefs.
-    Bad:  "https://publicaccess.hillsclerk.comjavascript:;"
-    Good: "https://publicaccess.hillsclerk.com/oripublicaccess/..."
-    """
     if not href:
         return ""
     href = re.sub(r"javascript:.*$", "", href, flags=re.IGNORECASE).strip()
     if not href:
         return ""
     if href.startswith("http"):
-        # Fix missing slash after .com
         href = re.sub(
             r"(https://publicaccess\.hillsclerk\.com)(?!/)",
             r"\1/oripublicaccess/",
@@ -189,34 +195,29 @@ def _parse_doc_type(raw: str) -> str:
 
 def score_record(rec: dict):
     flags, s = [], 30
-    doc    = rec.get("doc_type", "")
-    owner  = _norm(rec.get("owner", ""))
-    amount = rec.get("amount") or 0
-    filed  = rec.get("filed", "")
+    doc   = rec.get("doc_type", "")
+    owner = _norm(rec.get("owner", ""))
+    filed = rec.get("filed", "")
 
     if doc == "LP":
-        flags.append("Lis pendens"); s += 10
+        flags.append("Lis pendens");      s += 10
     if doc in ("LP", "NOFC"):
-        flags.append("Pre-foreclosure"); s += 10
+        flags.append("Pre-foreclosure");  s += 10
     if doc in ("JUD", "CCJ", "DRJUD"):
-        flags.append("Judgment lien"); s += 10
+        flags.append("Judgment lien");    s += 10
     if doc in ("LNCORPTX", "LNIRS", "LNFED", "TAXDEED"):
-        flags.append("Tax lien"); s += 10
+        flags.append("Tax lien");         s += 10
     if doc == "LNMECH":
-        flags.append("Mechanic lien"); s += 10
+        flags.append("Mechanic lien");    s += 10
     if doc == "PRO":
         flags.append("Probate / estate"); s += 10
-
-    # Only flag LLC/corp if the OWNER (homeowner) is an LLC — not the bank
     if re.search(r"\b(LLC|INC|CORP|LTD|TRUST|LP)\b", owner):
         flags.append("LLC / corp owner"); s += 10
-
-    # Combo bonus
     if "Lis pendens" in flags and "Pre-foreclosure" in flags:
         s += 20
 
     try:
-        amt = float(amount)
+        amt = float(rec.get("amount") or 0)
         if amt > 100_000: s += 15
         elif amt > 50_000: s += 10
     except Exception:
@@ -235,18 +236,16 @@ def score_record(rec: dict):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# HTML parser for clerk results pages
+# HTML parser for clerk results
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _parse_html(html: str) -> list[dict]:
     records = []
     soup = BeautifulSoup(html, "lxml")
-
     for table in soup.find_all("table"):
         rows = table.find_all("tr")
         if len(rows) < 2:
             continue
-
         headers = [
             th.get_text(" ", strip=True).upper()
             for th in rows[0].find_all(["th", "td"])
@@ -269,7 +268,6 @@ def _parse_html(html: str) -> list[dict]:
             if not cells:
                 continue
             try:
-                # Build clerk URL — skip javascript: links
                 clerk_url = ""
                 for a in row.find_all("a", href=True):
                     href = a["href"].strip()
@@ -277,11 +275,7 @@ def _parse_html(html: str) -> list[dict]:
                         clerk_url = _fix_clerk_url(href)
                         break
 
-                doc_num_raw = col(
-                    cells,
-                    "INSTRUMENT #", "INST #", "INST", "INSTRUMENT", "DOC #",
-                )
-                # If no real URL found, build one from the instrument number
+                doc_num_raw = col(cells, "INSTRUMENT #","INST #","INST","INSTRUMENT","DOC #")
                 if not clerk_url and doc_num_raw:
                     num = re.sub(r"\D", "", doc_num_raw)
                     if len(num) >= 8:
@@ -290,33 +284,24 @@ def _parse_html(html: str) -> list[dict]:
                             f"search.aspx?SearchType=OR&DocNumber={num}"
                         )
 
-                doc_type_raw = col(
-                    cells,
-                    "DOC TYPE", "TYPE", "DOCUMENT TYPE", "DOCTYPE",
-                )
+                doc_type_raw = col(cells, "DOC TYPE","TYPE","DOCUMENT TYPE","DOCTYPE")
                 doc_code = _parse_doc_type(doc_type_raw)
                 doc_num  = doc_num_raw or (
                     row.find("a").get_text(strip=True) if row.find("a") else ""
                 )
-                filed   = col(
-                    cells,
-                    "RECORDING DATE", "RECORD DATE", "DATE RECORDED", "DATE", "FILED",
-                )
-                grantor = col(cells, "GRANTOR", "NAME", "PARTY 1", "OWNER")
-                grantee = col(
-                    cells,
-                    "CROSS-PARTY NAME", "CROSS PARTY", "CROSS-PARTY", "GRANTEE", "PARTY 2",
-                )
-                legal   = col(cells, "LEGAL DESCRIPTION", "LEGAL", "DESCRIPTION")
+                filed   = col(cells, "RECORDING DATE","RECORD DATE","DATE RECORDED","DATE","FILED")
+                grantor = col(cells, "GRANTOR","NAME","PARTY 1","OWNER")
+                grantee = col(cells, "CROSS-PARTY NAME","CROSS PARTY","CROSS-PARTY","GRANTEE","PARTY 2")
+                legal   = col(cells, "LEGAL DESCRIPTION","LEGAL","DESCRIPTION")
 
-                amount_raw = col(cells, "AMOUNT", "CONSIDERATION", "DEBT")
+                amount_raw = col(cells, "AMOUNT","CONSIDERATION","DEBT")
                 amount = None
                 if amount_raw:
                     cleaned = re.sub(r"[^\d.]", "", amount_raw)
                     try:
                         amount = float(cleaned) if cleaned else None
                     except Exception:
-                        amount = None
+                        pass
 
                 if not grantor and not doc_num:
                     continue
@@ -342,166 +327,316 @@ def _parse_html(html: str) -> list[dict]:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Address enrichment — HCPA ArcGIS REST API
+# HCPA bulk DBF download + owner lookup
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _hcpa_query(where: str) -> list[dict]:
-    """Query HCPA ArcGIS REST — public endpoint, no auth."""
-    params = {
-        "where":              where,
-        "outFields":          (
-            "OWNER,OWN1,SITE_ADDR,SITEADDR,SITE_CITY,SITE_ZIP,"
-            "ADDR_1,MAILADR1,CITY,MAILCITY,STATE,ZIP,MAILZIP"
-        ),
-        "returnGeometry":     "false",
-        "f":                  "json",
-        "resultRecordCount":  5,
-    }
-    try:
-        r = requests.get(HCPA_API_URL, params=params, timeout=15, verify=False)
-        if r.status_code == 200:
-            data = r.json()
-            return [f["attributes"] for f in data.get("features", [])]
-    except Exception as e:
-        log.debug("HCPA query error [%s]: %s", where[:60], e)
-    return []
-
-def _build_addr(attrs: dict) -> dict:
-    site_addr  = _norm(attrs.get("SITE_ADDR") or attrs.get("SITEADDR") or "")
-    site_city  = _norm(attrs.get("SITE_CITY") or "TAMPA")
-    site_zip   = str(attrs.get("SITE_ZIP") or "").strip()[:5]
-    mail_addr  = _norm(attrs.get("ADDR_1") or attrs.get("MAILADR1") or site_addr)
-    mail_city  = _norm(attrs.get("CITY") or attrs.get("MAILCITY") or site_city)
-    mail_state = _norm(attrs.get("STATE") or "FL")
-    mail_zip   = str(attrs.get("ZIP") or attrs.get("MAILZIP") or site_zip).strip()[:5]
-    return {
-        "prop_address": site_addr,
-        "prop_city":    site_city,
-        "prop_state":   "FL",
-        "prop_zip":     site_zip,
-        "mail_address": mail_addr,
-        "mail_city":    mail_city,
-        "mail_state":   mail_state,
-        "mail_zip":     mail_zip,
-    }
-
-def enrich_address_hcpa(owner_name: str) -> dict:
+class ParcelLookup:
     """
-    Search HCPA for a property address by owner name.
-    Tries multiple name variants (FIRST LAST, LAST FIRST, LAST, FIRST).
+    Downloads the HCPA bulk NAL DBF file and builds an owner-name index.
+    Falls back gracefully if the download fails.
     """
-    empty = {
-        "prop_address": "", "prop_city": "", "prop_state": "FL", "prop_zip": "",
-        "mail_address": "", "mail_city": "", "mail_state": "FL", "mail_zip": "",
-    }
 
-    n = _norm(owner_name)
-    if not n or _is_institution(n):
-        return empty
+    def __init__(self):
+        self._index: dict[str, dict] = {}   # normalised name token → parcel attrs
+        self._loaded = False
 
-    parts = n.replace(",", "").split()
-    if not parts:
-        return empty
+    # ── find the download URL ─────────────────────────────────────────────────
+    def _find_dbf_url(self) -> str:
+        headers = {"User-Agent": "Mozilla/5.0"}
+        log.info("Scraping HCPA Maps-Data page for bulk download link…")
+        try:
+            r = requests.get(HCPA_MAPS_DATA_URL, headers=headers,
+                             timeout=20, verify=False)
+            soup = BeautifulSoup(r.text, "lxml")
+            for a in soup.find_all("a", href=True):
+                href = a["href"]
+                text = a.get_text(" ", strip=True).upper()
+                # Look for NAL, parcel, owner, bulk zip/dbf links
+                if re.search(r"NAL|PARCEL|OWNER|BULK|NAME.?ADDRESS", text, re.I) or \
+                   re.search(r"\.(zip|dbf)\b", href, re.I):
+                    full = href if href.startswith("http") else "https://hcpafl.org" + href
+                    log.info("  Candidate link: %s  (%s)", full, text[:60])
+                    # Test if it's a real file
+                    try:
+                        head = requests.head(full, headers=headers, timeout=10,
+                                             verify=False, allow_redirects=True)
+                        ct = head.headers.get("Content-Type","")
+                        cl = int(head.headers.get("Content-Length", 0))
+                        if head.status_code == 200 and cl > 100_000:
+                            log.info("  ✓ Found bulk file: %s (%d bytes)", full, cl)
+                            return full
+                    except Exception:
+                        pass
+        except Exception as e:
+            log.warning("HCPA page scrape error: %s", e)
 
-    # Build name variants to try
-    variants: list[str] = []
-    if len(parts) >= 2:
-        variants.append(n)                              # JOHN SMITH
-        variants.append(f"{parts[-1]} {parts[0]}")     # SMITH JOHN
-        variants.append(f"{parts[-1]}, {parts[0]}")    # SMITH, JOHN
-        variants.append(parts[-1])                     # SMITH (broad)
-    else:
-        variants.append(parts[0])
+        # Last-resort hardcoded candidates
+        candidates = [
+            "https://hcpafl.org/LinkClick.aspx?link=%2fDownloads%2fMaps-Data%2fNAL.zip&tabid=97",
+            "https://hcpafl.org/LinkClick.aspx?link=%2fDownloads%2fMaps-Data%2fNAL_OWNER.zip&tabid=97",
+            "https://hcpafl.org/Portals/0/Downloads/NAL.zip",
+            "https://hcpafl.org/Portals/0/Downloads/NAL_OWNER.zip",
+            "https://hcpafl.org/Portals/0/NAL.zip",
+        ]
+        for url in candidates:
+            try:
+                head = requests.head(url, headers=headers, timeout=10,
+                                     verify=False, allow_redirects=True)
+                if head.status_code == 200:
+                    cl = int(head.headers.get("Content-Length", 0))
+                    if cl > 100_000:
+                        log.info("  ✓ Fallback URL works: %s", url)
+                        return url
+            except Exception:
+                pass
 
-    for variant in variants:
-        safe = variant.replace("'", "''")
-        for field in ("OWNER", "OWN1"):
-            where = f"UPPER({field}) LIKE UPPER('%{safe}%')"
-            results = _hcpa_query(where)
-            if results:
-                addr = _build_addr(results[0])
-                if addr["prop_address"]:
-                    log.info("  ✓ HCPA [%s] '%s' → %s, %s %s",
-                             field, variant[:40],
-                             addr["prop_address"], addr["prop_city"], addr["prop_zip"])
-                    return addr
+        log.warning("Could not find HCPA bulk DBF URL — address enrichment disabled")
+        return ""
 
-    log.debug("  ✗ No HCPA match: %s", n[:50])
-    return empty
+    # ── download + parse ──────────────────────────────────────────────────────
+    def load(self):
+        if self._loaded:
+            return
+        self._loaded = True
+
+        if not HAS_DBF:
+            log.warning("dbfread not installed — address enrichment disabled")
+            return
+
+        url = self._find_dbf_url()
+        if not url:
+            return
+
+        log.info("Downloading HCPA bulk parcel file…")
+        try:
+            r = requests.get(
+                url,
+                headers={"User-Agent": "Mozilla/5.0"},
+                timeout=120,
+                verify=False,
+                stream=True,
+            )
+            r.raise_for_status()
+            raw = r.content
+            log.info("  Downloaded %d bytes", len(raw))
+        except Exception as e:
+            log.warning("HCPA download failed: %s", e)
+            return
+
+        # Unzip if needed
+        dbf_bytes = None
+        try:
+            with zipfile.ZipFile(io.BytesIO(raw)) as zf:
+                for name in zf.namelist():
+                    if name.upper().endswith(".DBF"):
+                        dbf_bytes = zf.read(name)
+                        log.info("  Extracted DBF: %s (%d bytes)", name, len(dbf_bytes))
+                        break
+        except zipfile.BadZipFile:
+            # Maybe it's a raw DBF
+            if raw[:4] in (b'\x03', b'\x04', b'\x83', b'\x8b'):
+                dbf_bytes = raw
+
+        if not dbf_bytes:
+            log.warning("Could not extract DBF from download")
+            return
+
+        # Write to temp file (dbfread needs a file path)
+        tmp = Path("data/_nal_tmp.dbf")
+        tmp.parent.mkdir(exist_ok=True)
+        tmp.write_bytes(dbf_bytes)
+
+        log.info("  Parsing DBF records…")
+        count = 0
+        try:
+            for rec in DBF(str(tmp), encoding="latin-1", ignore_missing_memofile=True):
+                owner = _norm(
+                    rec.get("OWNER") or rec.get("OWN1") or ""
+                )
+                if not owner:
+                    continue
+                site_addr = _norm(
+                    rec.get("SITE_ADDR") or rec.get("SITEADDR") or ""
+                )
+                if not site_addr:
+                    continue
+
+                attrs = {
+                    "prop_address": site_addr,
+                    "prop_city":    _norm(rec.get("SITE_CITY") or "TAMPA"),
+                    "prop_state":   "FL",
+                    "prop_zip":     str(rec.get("SITE_ZIP") or "").strip()[:5],
+                    "mail_address": _norm(
+                        rec.get("ADDR_1") or rec.get("MAILADR1") or site_addr
+                    ),
+                    "mail_city":    _norm(
+                        rec.get("CITY") or rec.get("MAILCITY") or "TAMPA"
+                    ),
+                    "mail_state":   _norm(rec.get("STATE") or "FL"),
+                    "mail_zip":     str(
+                        rec.get("ZIP") or rec.get("MAILZIP") or ""
+                    ).strip()[:5],
+                }
+
+                # Index by every token in the owner name for fuzzy matching
+                for token in owner.split():
+                    if len(token) > 2:
+                        self._index.setdefault(token, []).append(
+                            (owner, attrs)
+                        )
+                count += 1
+
+            log.info("  Indexed %d parcels", count)
+        except Exception as e:
+            log.warning("DBF parse error: %s", e)
+        finally:
+            try:
+                tmp.unlink()
+            except Exception:
+                pass
+
+    # ── lookup ────────────────────────────────────────────────────────────────
+    def lookup(self, owner_name: str) -> dict:
+        empty = {
+            "prop_address":"","prop_city":"","prop_state":"FL","prop_zip":"",
+            "mail_address":"","mail_city":"","mail_state":"FL","mail_zip":"",
+        }
+        if not self._index or not owner_name:
+            return empty
+
+        n = _norm(owner_name)
+        parts = [p for p in n.split() if len(p) > 2]
+        if not parts:
+            return empty
+
+        # Score candidates: count how many name tokens match
+        candidates: dict[str, list] = {}
+        for part in parts:
+            for full_name, attrs in self._index.get(part, []):
+                if full_name not in candidates:
+                    candidates[full_name] = [0, attrs]
+                candidates[full_name][0] += 1
+
+        if not candidates:
+            return empty
+
+        # Best match = most token overlaps
+        best_name, (best_score, best_attrs) = max(
+            candidates.items(), key=lambda x: x[1][0]
+        )
+
+        # Require at least 2 matching tokens (or 1 if name is single word)
+        min_score = 1 if len(parts) == 1 else 2
+        if best_score < min_score:
+            return empty
+
+        log.info("  ✓ Parcel match [score=%d]: '%s' → '%s' %s %s",
+                 best_score, n[:40], best_attrs["prop_address"],
+                 best_attrs["prop_city"], best_attrs["prop_zip"])
+        return best_attrs
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Clerk scraper (Playwright)
+# Clerk scraper — Playwright with correct Chosen.js interaction
 # ─────────────────────────────────────────────────────────────────────────────
 
 async def scrape_one_doc_type(
     page, doc_code: str, date_from: str, date_to: str
 ) -> list[dict]:
+    """
+    Scrape one doc type from the clerk portal.
+    Uses the exact select id and option value format discovered by debug_both.py.
+    """
+    option_value = CLERK_OPTION_VALUES.get(doc_code)
+    if not option_value:
+        log.warning("[%s] No option value mapping — skipping", doc_code)
+        return []
+
     results = []
     for attempt in range(1, 4):
         try:
-            await page.goto(CLERK_URL, wait_until="domcontentloaded", timeout=60_000)
-            await page.wait_for_timeout(3_000)
+            await page.goto(CLERK_URL, wait_until="networkidle", timeout=60_000)
+            await page.wait_for_timeout(2_000)
 
-            selected = await page.evaluate(f"""
+            # ── Set the doc-type dropdown (Chosen.js hidden select) ───────────
+            # The real <select> id is OBKey__1285_1 but it's hidden by Chosen.
+            # We set it via JavaScript directly, then fire chosen:updated.
+            set_result = await page.evaluate(f"""
                 () => {{
-                    const sel = document.querySelector(
-                        'select.doc-type, select.for-chosen, '
-                        + 'select[class*="doc-type"], select[id*="OBKey"]'
-                    );
-                    if (!sel) return 'no select found';
+                    const sel = document.getElementById('OBKey__1285_1');
+                    if (!sel) return 'ERROR: select not found';
+                    // Find the exact option value
                     let found = null;
                     for (const opt of sel.options) {{
-                        if (opt.text.includes('({doc_code})')) {{ found = opt; break; }}
+                        if (opt.value === '{option_value}') {{
+                            found = opt;
+                            break;
+                        }}
                     }}
-                    if (!found) return 'option not found for {doc_code}';
+                    if (!found) {{
+                        // Try partial match on value
+                        const code = '{doc_code}';
+                        for (const opt of sel.options) {{
+                            if (opt.value.includes('(' + code + ')')) {{
+                                found = opt;
+                                break;
+                            }}
+                        }}
+                    }}
+                    if (!found) return 'ERROR: option not found for {option_value}';
                     sel.value = found.value;
                     sel.dispatchEvent(new Event('change', {{bubbles: true}}));
+                    // Trigger Chosen.js to update its display
                     if (window.jQuery) {{
-                        window.jQuery(sel).val(found.value)
-                            .trigger('change').trigger('chosen:updated');
+                        window.jQuery(sel).trigger('chosen:updated');
                     }}
-                    return 'selected: ' + found.text;
+                    return 'OK: ' + found.value;
                 }}
             """)
-            log.info("[%s] select → %s", doc_code, selected)
-            await page.wait_for_timeout(1_000)
-            await page.keyboard.press("Escape")
+            log.info("[%s] dropdown → %s", doc_code, set_result)
+
+            if "ERROR" in str(set_result):
+                log.warning("[%s] Skipping — could not set dropdown", doc_code)
+                return []
+
             await page.wait_for_timeout(500)
 
+            # ── Set date range using the exact field IDs ──────────────────────
             await page.evaluate(f"""
                 () => {{
-                    const begins = document.querySelectorAll(
-                        'input.record-begin, input[class*="record-begin"]'
-                    );
-                    const ends = document.querySelectorAll(
-                        'input.record-end, input[class*="record-end"]'
-                    );
-                    if (begins[0]) {{
-                        begins[0].value = '{date_from}';
-                        begins[0].dispatchEvent(new Event('change', {{bubbles: true}}));
+                    const begin = document.getElementById('OBKey__1634_1');
+                    const end   = document.getElementById('OBKey__1634_2');
+                    if (begin) {{
+                        begin.value = '{date_from}';
+                        begin.dispatchEvent(new Event('change', {{bubbles: true}}));
                     }}
-                    if (ends[0]) {{
-                        ends[0].value = '{date_to}';
-                        ends[0].dispatchEvent(new Event('change', {{bubbles: true}}));
+                    if (end) {{
+                        end.value = '{date_to}';
+                        end.dispatchEvent(new Event('change', {{bubbles: true}}));
                     }}
                 }}
             """)
-            await page.wait_for_timeout(500)
+            await page.wait_for_timeout(300)
 
+            # ── Click Search button (id="sub") ────────────────────────────────
             await page.evaluate("""
                 () => {
-                    for (const el of document.querySelectorAll(
-                            'input[type=submit], button')) {
-                        if ((el.value || el.textContent || '').trim() === 'Search') {
-                            el.click(); return;
-                        }
+                    const btn = document.getElementById('sub');
+                    if (btn) { btn.click(); return 'clicked sub'; }
+                    // fallback
+                    for (const el of document.querySelectorAll('button, input[type=button]')) {
+                        const t = (el.textContent || el.value || '').trim().toUpperCase();
+                        if (t === 'SEARCH' || t.includes('SEARCH')) { el.click(); return 'clicked fallback'; }
                     }
+                    return 'no search button found';
                 }
             """)
-            await page.wait_for_load_state("domcontentloaded", timeout=30_000)
-            await page.wait_for_timeout(4_000)
+            log.info("[%s] search clicked", doc_code)
 
+            await page.wait_for_load_state("networkidle", timeout=30_000)
+            await page.wait_for_timeout(3_000)
+
+            # ── Paginate through results ──────────────────────────────────────
             page_num = 1
             while True:
                 html = await page.content()
@@ -515,7 +650,7 @@ async def scrape_one_doc_type(
                     break
                 try:
                     await page.click("a:has-text('Next')", timeout=8_000)
-                    await page.wait_for_load_state("domcontentloaded", timeout=20_000)
+                    await page.wait_for_load_state("networkidle", timeout=20_000)
                     await page.wait_for_timeout(1_500)
                     page_num += 1
                 except Exception:
@@ -529,6 +664,7 @@ async def scrape_one_doc_type(
         except Exception as exc:
             log.warning("[%s] error attempt %d: %s", doc_code, attempt, exc)
         await asyncio.sleep(3)
+
     return results
 
 
@@ -543,12 +679,16 @@ async def main():
     date_to      = date_to_dt.strftime("%m/%d/%Y")
 
     log.info("=" * 64)
-    log.info("Hillsborough County Motivated Seller Scraper  v30")
+    log.info("Hillsborough County Motivated Seller Scraper  v31")
     log.info("Range : %s → %s  (%d days)", date_from, date_to, LOOKBACK_DAYS)
     log.info("=" * 64)
 
     all_records: list[dict] = []
     Path("data").mkdir(exist_ok=True)
+
+    # ── Load HCPA parcel data upfront ─────────────────────────────────────────
+    parcel = ParcelLookup()
+    parcel.load()
 
     async with async_playwright() as pw:
         browser = await pw.chromium.launch(
@@ -566,7 +706,7 @@ async def main():
         )
         clerk_page = await ctx.new_page()
 
-        # ── Scrape clerk portal ───────────────────────────────────────────────
+        # ── Scrape each doc type from clerk portal ────────────────────────────
         for doc_code, (cat, cat_label) in DOC_TYPE_MAP.items():
             log.info("── [%s] %s", doc_code, cat_label)
             raw_rows = await scrape_one_doc_type(
@@ -579,11 +719,10 @@ async def main():
 
                 grantor = _norm(r.get("grantor", ""))
                 grantee = _norm(r.get("grantee", ""))
+                owner   = _resolve_owner(doc_type, grantor, grantee)
 
-                # ─── THE CORE FIX ────────────────────────────────────────────
-                # owner = homeowner (motivated seller), NOT the filing institution
-                owner = _resolve_owner(doc_type, grantor, grantee)
-                # ─────────────────────────────────────────────────────────────
+                # Address enrichment from parcel index
+                addr = parcel.lookup(owner) if owner else {}
 
                 base_rec = {
                     "doc_num":      r.get("doc_num", ""),
@@ -591,19 +730,19 @@ async def main():
                     "filed":        r.get("filed", ""),
                     "cat":          cat,
                     "cat_label":    cat_label,
-                    "owner":        owner,      # ← homeowner
-                    "filer":        grantor,    # ← institution that filed
-                    "grantee":      grantee,    # ← kept for reference
+                    "owner":        owner,
+                    "filer":        grantor,
+                    "grantee":      grantee,
                     "amount":       r.get("amount"),
                     "legal":        r.get("legal", ""),
-                    "prop_address": "",
-                    "prop_city":    "",
+                    "prop_address": addr.get("prop_address", ""),
+                    "prop_city":    addr.get("prop_city", ""),
                     "prop_state":   "FL",
-                    "prop_zip":     "",
-                    "mail_address": "",
-                    "mail_city":    "",
-                    "mail_state":   "FL",
-                    "mail_zip":     "",
+                    "prop_zip":     addr.get("prop_zip", ""),
+                    "mail_address": addr.get("mail_address", ""),
+                    "mail_city":    addr.get("mail_city", ""),
+                    "mail_state":   addr.get("mail_state", "FL"),
+                    "mail_zip":     addr.get("mail_zip", ""),
                     "clerk_url":    r.get("clerk_url", ""),
                     "flags":        [],
                     "score":        0,
@@ -613,33 +752,9 @@ async def main():
                 base_rec["flags"] = flags
                 all_records.append(base_rec)
 
-        log.info("Scraped %d total records from clerk portal", len(all_records))
         await browser.close()
 
-    # ── Address enrichment via HCPA REST API ─────────────────────────────────
-    log.info("Enriching addresses via HCPA ArcGIS REST API…")
-    enriched = 0
-
-    for i, rec in enumerate(all_records):
-        owner = rec.get("owner", "")
-        if not owner or _is_institution(owner):
-            continue
-        try:
-            addr = enrich_address_hcpa(owner)
-            if addr.get("prop_address"):
-                rec.update(addr)
-                score, flags = score_record(rec)
-                rec["score"] = score
-                rec["flags"] = flags
-                enriched += 1
-        except Exception as e:
-            log.debug("Enrich error [%s]: %s", owner[:40], e)
-
-        if (i + 1) % 100 == 0:
-            log.info("  %d / %d processed — %d with address",
-                     i + 1, len(all_records), enriched)
-
-    log.info("Enrichment done: %d / %d got addresses", enriched, len(all_records))
+    log.info("Scraped %d total records", len(all_records))
 
     # ── Sort and save ─────────────────────────────────────────────────────────
     all_records.sort(key=lambda x: x["score"], reverse=True)
@@ -662,15 +777,15 @@ async def main():
         log.info("Saved → %s  (%d records, %d with address)",
                  path, len(all_records), with_addr)
 
-    # ── GHL CSV export ────────────────────────────────────────────────────────
+    # ── GHL CSV ───────────────────────────────────────────────────────────────
     GHL_CSV_PATH.parent.mkdir(parents=True, exist_ok=True)
     GHL_HEADERS = [
-        "First Name", "Last Name",
-        "Mailing Address", "Mailing City", "Mailing State", "Mailing Zip",
-        "Property Address", "Property City", "Property State", "Property Zip",
-        "Lead Type", "Document Type", "Date Filed", "Document Number",
-        "Amount/Debt Owed", "Seller Score", "Motivated Seller Flags",
-        "Filer", "Source", "Public Records URL",
+        "First Name","Last Name",
+        "Mailing Address","Mailing City","Mailing State","Mailing Zip",
+        "Property Address","Property City","Property State","Property Zip",
+        "Lead Type","Document Type","Date Filed","Document Number",
+        "Amount/Debt Owed","Seller Score","Motivated Seller Flags",
+        "Filer","Source","Public Records URL",
     ]
     with open(GHL_CSV_PATH, "w", newline="", encoding="utf-8") as fh:
         w = csv.DictWriter(fh, fieldnames=GHL_HEADERS, extrasaction="ignore")
