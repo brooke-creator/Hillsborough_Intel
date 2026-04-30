@@ -1,11 +1,9 @@
 """
-Hillsborough County Motivated Seller Lead Scraper v34
-Address enrichment fix:
-  - HCPA Basic Search URL confirmed: gis.hcpafl.org/propertysearch/#/nav/Basic Search
-  - Owner Name input placeholder: "EX: SMITH, JOHN L"
-  - After search, URL changes to: #/search/basic/owner=LASTNAME
-  - Results table columns: Folio | Owner Name | Property Address | Sales Date | Sales Price | Homestead
-  - Navigate directly via URL to bypass input/button issues
+Hillsborough County Motivated Seller Lead Scraper v35
+Change from v34:
+  - Only enrich owners with score >= 70 (~150-200 lookups vs 2000)
+  - Finishes well within 90 minute GitHub Actions timeout
+  - Lower-scored records still appear in dashboard, just without addresses
 """
 
 import asyncio
@@ -26,12 +24,13 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # ─────────────────────────────────────────────────────────────────────────────
 # Config
 # ─────────────────────────────────────────────────────────────────────────────
-CLERK_URL      = "https://publicaccess.hillsclerk.com/oripublicaccess/"
-HCPA_BASE      = "https://gis.hcpafl.org/propertysearch"
-LOOKBACK_DAYS  = int(os.getenv("LOOKBACK_DAYS", "7"))
+CLERK_URL        = "https://publicaccess.hillsclerk.com/oripublicaccess/"
+HCPA_BASE        = "https://gis.hcpafl.org/propertysearch"
+LOOKBACK_DAYS    = int(os.getenv("LOOKBACK_DAYS", "7"))
+ENRICH_MIN_SCORE = 70   # only look up addresses for top leads
 
-OUTPUT_PATHS   = [Path("dashboard/records.json"), Path("data/records.json")]
-GHL_CSV_PATH   = Path("data/ghl_export.csv")
+OUTPUT_PATHS  = [Path("dashboard/records.json"), Path("data/records.json")]
+GHL_CSV_PATH  = Path("data/ghl_export.csv")
 
 DOC_TYPE_MAP = {
     "LP":       ("foreclosure",  "Lis Pendens"),
@@ -300,10 +299,6 @@ def _parse_html(html: str) -> list[dict]:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _parse_hcpa_table(html: str, owner_parts: list[str]) -> dict:
-    """
-    Parse HCPA search results table and find the best matching address.
-    Table columns: Folio | Owner Name | Property Address | Sales Date | Sales Price | Homestead
-    """
     empty = {
         "prop_address": "", "prop_city": "", "prop_state": "FL", "prop_zip": "",
         "mail_address": "", "mail_city": "", "mail_state": "FL", "mail_zip": "",
@@ -311,7 +306,6 @@ def _parse_hcpa_table(html: str, owner_parts: list[str]) -> dict:
 
     soup = BeautifulSoup(html, "lxml")
 
-    # Find the results table — it has a "Property Address" column header
     target_table = None
     for table in soup.find_all("table"):
         header_text = table.get_text(" ", strip=True).upper()
@@ -326,18 +320,15 @@ def _parse_hcpa_table(html: str, owner_parts: list[str]) -> dict:
     if len(rows) < 2:
         return empty
 
-    # Find column indices
     header_cells = rows[0].find_all(["th", "td"])
     headers = [c.get_text(" ", strip=True).upper() for c in header_cells]
-
-    owner_col   = next((i for i, h in enumerate(headers) if "OWNER" in h), None)
     address_col = next((i for i, h in enumerate(headers) if "ADDRESS" in h), None)
 
     if address_col is None:
         return empty
 
-    best_match  = None
-    best_score  = 0
+    best_match = None
+    best_score = 0
 
     for row in rows[1:]:
         cells = row.find_all("td")
@@ -348,25 +339,20 @@ def _parse_hcpa_table(html: str, owner_parts: list[str]) -> dict:
         if not addr_raw or addr_raw == "—":
             continue
 
-        # Score this row by how many owner name parts match
         row_text = _norm(row.get_text(" ", strip=True))
         score = sum(1 for p in owner_parts if len(p) > 2 and p in row_text)
 
         if score > best_score:
-            best_score  = score
-            best_match  = addr_raw
+            best_score = score
+            best_match = addr_raw
 
     if not best_match or best_score == 0:
         return empty
 
-    # Parse address — format is "12345 STREET NAME, CITY" or "12345 STREET NAME, CITY ST"
-    # Try to split city from street
     addr_parts = best_match.split(",")
     street = addr_parts[0].strip()
     city   = addr_parts[1].strip() if len(addr_parts) > 1 else "TAMPA"
-
-    # Remove state abbreviation from city if present (e.g. "TAMPA FL" or "TAMPA")
-    city = re.sub(r"\s+FL\s*$", "", city).strip()
+    city   = re.sub(r"\s+FL\s*$", "", city).strip()
 
     return {
         "prop_address": street,
@@ -381,10 +367,6 @@ def _parse_hcpa_table(html: str, owner_parts: list[str]) -> dict:
 
 
 async def hcpa_lookup(page, owner_name: str) -> dict:
-    """
-    Look up property address by navigating directly to the HCPA search URL.
-    URL pattern confirmed: gis.hcpafl.org/propertysearch/#/search/basic/owner=LASTNAME
-    """
     empty = {
         "prop_address": "", "prop_city": "", "prop_state": "FL", "prop_zip": "",
         "mail_address": "", "mail_city": "", "mail_state": "FL", "mail_zip": "",
@@ -394,51 +376,47 @@ async def hcpa_lookup(page, owner_name: str) -> dict:
     if not n or _is_institution(n):
         return empty
 
-    # Clean name for URL — use first token (clerk stores as "LASTNAME FIRSTNAME")
     parts = n.replace(",", "").split()
     if not parts:
         return empty
 
-    # Use first two tokens joined for a tighter search (e.g. "MANN FAIGY")
     search_term = "+".join(parts[:2]) if len(parts) >= 2 else parts[0]
-    # URL-encode spaces as %20 or use + — the site uses the hash router
-    search_url = f"{HCPA_BASE}/#/search/basic/owner={search_term}"
+    search_url  = f"{HCPA_BASE}/#/search/basic/owner={search_term}"
 
     try:
         await page.goto(search_url, wait_until="networkidle", timeout=30_000)
-        await page.wait_for_timeout(3_000)
+        await page.wait_for_timeout(2_000)
 
-        # Wait for results table to appear
         try:
-            await page.wait_for_selector("table", timeout=8_000)
+            await page.wait_for_selector("table", timeout=6_000)
         except Exception:
             pass
 
-        await page.wait_for_timeout(1_000)
         html = await page.content()
-
         addr = _parse_hcpa_table(html, parts)
 
         if addr.get("prop_address"):
             log.info("  ✓ HCPA '%s' → %s, %s",
                      n[:40], addr["prop_address"], addr["prop_city"])
-        else:
-            # Try with just last name if two-token search failed
-            if len(parts) >= 2:
-                search_url2 = f"{HCPA_BASE}/#/search/basic/owner={parts[0]}"
-                await page.goto(search_url2, wait_until="networkidle", timeout=20_000)
-                await page.wait_for_timeout(2_000)
-                try:
-                    await page.wait_for_selector("table", timeout=5_000)
-                except Exception:
-                    pass
-                html2 = await page.content()
-                addr = _parse_hcpa_table(html2, parts)
-                if addr.get("prop_address"):
-                    log.info("  ✓ HCPA (fallback) '%s' → %s, %s",
-                             n[:40], addr["prop_address"], addr["prop_city"])
+            return addr
 
-        return addr
+        # Fallback: last name only
+        if len(parts) >= 2:
+            search_url2 = f"{HCPA_BASE}/#/search/basic/owner={parts[0]}"
+            await page.goto(search_url2, wait_until="networkidle", timeout=20_000)
+            await page.wait_for_timeout(2_000)
+            try:
+                await page.wait_for_selector("table", timeout=5_000)
+            except Exception:
+                pass
+            html2 = await page.content()
+            addr = _parse_hcpa_table(html2, parts)
+            if addr.get("prop_address"):
+                log.info("  ✓ HCPA (fallback) '%s' → %s, %s",
+                         n[:40], addr["prop_address"], addr["prop_city"])
+                return addr
+
+        return empty
 
     except PWTimeout:
         log.debug("HCPA timeout: %s", n[:40])
@@ -546,7 +524,7 @@ async def main():
     date_to      = date_to_dt.strftime("%m/%d/%Y")
 
     log.info("=" * 64)
-    log.info("Hillsborough County Motivated Seller Scraper  v34")
+    log.info("Hillsborough County Motivated Seller Scraper  v35")
     log.info("Range : %s → %s  (%d days)", date_from, date_to, LOOKBACK_DAYS)
     log.info("=" * 64)
 
@@ -608,15 +586,19 @@ async def main():
 
         log.info("Scraped %d total records", len(all_records))
 
-        # ── Step 2: Dedupe owners and enrich via HCPA ─────────────────────────
+        # ── Step 2: Enrich only score >= 70 leads ────────────────────────────
+        # Dedupe owners from qualifying records only
         unique_owners: dict[str, dict] = {}
         for rec in all_records:
             owner = rec.get("owner", "")
-            if owner and not _is_institution(owner) and owner not in unique_owners:
+            score = rec.get("score", 0)
+            if (owner and score >= ENRICH_MIN_SCORE
+                    and not _is_institution(owner)
+                    and owner not in unique_owners):
                 unique_owners[owner] = {}
 
-        log.info("Enriching %d unique owners via HCPA Playwright…",
-                 len(unique_owners))
+        log.info("Enriching %d unique owners (score >= %d) via HCPA…",
+                 len(unique_owners), ENRICH_MIN_SCORE)
 
         enriched_count = 0
         for i, owner in enumerate(unique_owners):
@@ -632,7 +614,7 @@ async def main():
         log.info("HCPA done: %d / %d owners got addresses",
                  enriched_count, len(unique_owners))
 
-        # Apply addresses back to records
+        # Apply addresses back to all records with matching owner
         for rec in all_records:
             addr = unique_owners.get(rec.get("owner", ""), {})
             if addr.get("prop_address"):
