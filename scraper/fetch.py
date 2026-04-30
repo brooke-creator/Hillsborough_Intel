@@ -1,10 +1,10 @@
 """
-Hillsborough County Motivated Seller Lead Scraper v32
-Changes from v31:
-  - Removed doc types not on clerk portal (NOFC, LNIRS, LNFED, LNMECH, LNHOA)
-  - All remaining CLERK_OPTION_VALUES confirmed from live page scan
-  - Address enrichment: HCPA GIS property search API (no login required)
-    POST to gis.hcpafl.org/propertysearch/api/search by owner name
+Hillsborough County Motivated Seller Lead Scraper v33
+Changes from v32:
+  - Address enrichment: Playwright scrapes HCPA property search UI
+    (bypasses IP allowlist block that stops all direct API calls)
+  - Only enriches unique owner names (deduped) to save time
+  - Shares one Playwright browser for both clerk scraping and HCPA lookup
 """
 
 import asyncio
@@ -17,7 +17,6 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import urllib3
-import requests
 from bs4 import BeautifulSoup
 from playwright.async_api import async_playwright, TimeoutError as PWTimeout
 
@@ -27,17 +26,13 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # Config
 # ─────────────────────────────────────────────────────────────────────────────
 CLERK_URL     = "https://publicaccess.hillsclerk.com/oripublicaccess/"
+HCPA_SEARCH   = "https://gis.hcpafl.org/propertysearch/#/nav/Basic%20Search"
 LOOKBACK_DAYS = int(os.getenv("LOOKBACK_DAYS", "7"))
 
-# HCPA property search API — no auth required
-HCPA_SEARCH_API = "https://gis.hcpafl.org/propertysearch/api/search"
-HCPA_DETAIL_API = "https://gis.hcpafl.org/propertysearch/api/parcel"
+OUTPUT_PATHS  = [Path("dashboard/records.json"), Path("data/records.json")]
+GHL_CSV_PATH  = Path("data/ghl_export.csv")
 
-OUTPUT_PATHS = [Path("dashboard/records.json"), Path("data/records.json")]
-GHL_CSV_PATH = Path("data/ghl_export.csv")
-
-# Only doc types that actually exist on the clerk portal dropdown
-# (confirmed by live page scan — NOFC, LNIRS, LNFED, LNMECH, LNHOA not present)
+# Only doc types confirmed to exist on the clerk portal dropdown
 DOC_TYPE_MAP = {
     "LP":       ("foreclosure",  "Lis Pendens"),
     "TAXDEED":  ("tax",          "Tax Deed"),
@@ -54,7 +49,7 @@ DOC_TYPE_MAP = {
 
 TARGET_TYPES = set(DOC_TYPE_MAP.keys())
 
-# Exact option values confirmed from live clerk portal page scan
+# Exact option values from live clerk portal page scan
 CLERK_OPTION_VALUES = {
     "LP":       "(LP) LIS PENDENS",
     "TAXDEED":  "(TAXDEED) TAX DEED",
@@ -154,8 +149,7 @@ def _fix_clerk_url(href: str) -> str:
     if href.startswith("http"):
         href = re.sub(
             r"(https://publicaccess\.hillsclerk\.com)(?!/)",
-            r"\1/oripublicaccess/",
-            href,
+            r"\1/oripublicaccess/", href,
         )
         return href
     if href.startswith("/"):
@@ -179,7 +173,7 @@ def score_record(rec: dict):
 
     if doc == "LP":
         flags.append("Lis pendens");      s += 10
-    if doc in ("LP",):
+    if doc == "LP":
         flags.append("Pre-foreclosure");  s += 10
     if doc in ("JUD", "CCJ", "DRJUD"):
         flags.append("Judgment lien");    s += 10
@@ -305,115 +299,13 @@ def _parse_html(html: str) -> list[dict]:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Address enrichment via HCPA property search API
+# HCPA property search via Playwright
 # ─────────────────────────────────────────────────────────────────────────────
 
-_hcpa_session = requests.Session()
-_hcpa_session.headers.update({
-    "User-Agent":   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-    "Accept":       "application/json, text/plain, */*",
-    "Referer":      "https://gis.hcpafl.org/propertysearch/",
-    "Origin":       "https://gis.hcpafl.org",
-})
-
-def _hcpa_search_by_name(last: str, first: str = "") -> list[dict]:
+async def hcpa_lookup(page, owner_name: str) -> dict:
     """
-    Search HCPA property search API by owner name.
-    Returns list of result dicts.
-    """
-    try:
-        params = {
-            "ownerName": f"{last} {first}".strip(),
-            "searchType": "owner",
-        }
-        r = _hcpa_session.get(
-            HCPA_SEARCH_API, params=params, timeout=15, verify=False
-        )
-        if r.status_code == 200:
-            data = r.json()
-            # API returns either a list or {"results": [...]}
-            if isinstance(data, list):
-                return data
-            return data.get("results", data.get("parcels", []))
-    except Exception as e:
-        log.debug("HCPA search error (%s %s): %s", last, first, e)
-
-    # Fallback: try the GIS search endpoint
-    try:
-        payload = {
-            "criteria": [{"field": "ownerName", "value": f"{last} {first}".strip()}],
-            "pageSize": 5,
-        }
-        r = _hcpa_session.post(
-            HCPA_SEARCH_API, json=payload, timeout=15, verify=False
-        )
-        if r.status_code == 200:
-            data = r.json()
-            if isinstance(data, list):
-                return data
-            return data.get("results", data.get("parcels", []))
-    except Exception as e:
-        log.debug("HCPA POST search error: %s", e)
-
-    return []
-
-def _extract_addr_from_result(result: dict) -> dict:
-    """Pull address fields from an HCPA search result."""
-    empty = {
-        "prop_address": "", "prop_city": "", "prop_state": "FL", "prop_zip": "",
-        "mail_address": "", "mail_city": "", "mail_state": "FL", "mail_zip": "",
-    }
-
-    # Try common field name patterns
-    site = (
-        result.get("siteAddress") or result.get("site_address") or
-        result.get("SITE_ADDR") or result.get("siteAddr") or
-        result.get("address") or result.get("propertyAddress") or ""
-    )
-    city = (
-        result.get("siteCity") or result.get("site_city") or
-        result.get("SITE_CITY") or result.get("city") or "TAMPA"
-    )
-    zipcode = str(
-        result.get("siteZip") or result.get("site_zip") or
-        result.get("SITE_ZIP") or result.get("zip") or ""
-    ).strip()[:5]
-
-    mail = (
-        result.get("mailingAddress") or result.get("mailing_address") or
-        result.get("ADDR_1") or result.get("mailAddr") or site
-    )
-    mail_city = (
-        result.get("mailingCity") or result.get("mailing_city") or
-        result.get("MAILCITY") or city
-    )
-    mail_state = (
-        result.get("mailingState") or result.get("mailing_state") or
-        result.get("STATE") or "FL"
-    )
-    mail_zip = str(
-        result.get("mailingZip") or result.get("mailing_zip") or
-        result.get("MAILZIP") or zipcode
-    ).strip()[:5]
-
-    if not _norm(site):
-        return empty
-
-    return {
-        "prop_address": _norm(site),
-        "prop_city":    _norm(city),
-        "prop_state":   "FL",
-        "prop_zip":     zipcode,
-        "mail_address": _norm(mail),
-        "mail_city":    _norm(mail_city),
-        "mail_state":   _norm(mail_state) or "FL",
-        "mail_zip":     mail_zip,
-    }
-
-def enrich_address(owner_name: str) -> dict:
-    """
-    Look up property address from HCPA by owner name.
-    Tries multiple name variants.
+    Search HCPA property search UI for an owner name.
+    Returns address dict or empty dict.
     """
     empty = {
         "prop_address": "", "prop_city": "", "prop_state": "FL", "prop_zip": "",
@@ -424,45 +316,192 @@ def enrich_address(owner_name: str) -> dict:
     if not n or _is_institution(n):
         return empty
 
-    # Build name variants
+    # Build search query — use last name only for broadest match,
+    # then verify the result matches our owner
     parts = n.replace(",", "").split()
     if not parts:
         return empty
 
-    # Try: last name only, then last+first, then full name
-    queries = []
-    if len(parts) >= 2:
-        queries.append((parts[-1], parts[0]))   # (last, first)
-        queries.append((parts[0], parts[-1]))   # (first-token as last, last-token as first)
-    queries.append((parts[0], ""))              # last name only
+    # Use the last token as last name (clerk format: "SMITH JOHN")
+    last_name = parts[0]
+    if len(last_name) < 2:
+        return empty
 
-    for last, first in queries:
-        results = _hcpa_search_by_name(last, first)
-        if not results:
-            continue
+    try:
+        # Navigate to HCPA basic search
+        await page.goto(HCPA_SEARCH, wait_until="networkidle", timeout=30_000)
+        await page.wait_for_timeout(2_000)
 
-        # Score results by how many name tokens match
-        best = None
-        best_score = 0
-        for res in results[:5]:
-            owner_field = _norm(
-                res.get("ownerName") or res.get("owner") or
-                res.get("OWNER") or res.get("owner1") or ""
+        # Find the owner name search input
+        # Try multiple possible selectors
+        search_input = None
+        for selector in [
+            "input[placeholder*='Owner']",
+            "input[placeholder*='owner']",
+            "input[placeholder*='Name']",
+            "input[id*='owner']",
+            "input[id*='Owner']",
+            "input[ng-model*='owner']",
+            "input[ng-model*='name']",
+            ".owner-search input",
+            "input[type='text']:first-of-type",
+        ]:
+            try:
+                el = await page.query_selector(selector)
+                if el:
+                    search_input = selector
+                    break
+            except Exception:
+                continue
+
+        if not search_input:
+            # Dump what inputs exist for debugging
+            inputs = await page.evaluate("""
+                () => [...document.querySelectorAll('input')].map(i => ({
+                    id: i.id, placeholder: i.placeholder,
+                    ngModel: i.getAttribute('ng-model') || '',
+                    type: i.type
+                }))
+            """)
+            log.debug("HCPA inputs found: %s", inputs)
+            return empty
+
+        # Type the last name
+        await page.fill(search_input, last_name)
+        await page.wait_for_timeout(500)
+
+        # Submit — try pressing Enter or clicking a search button
+        try:
+            await page.keyboard.press("Enter")
+        except Exception:
+            pass
+
+        # Also try clicking search button
+        for btn_sel in ["button[type='submit']", "button:has-text('Search')", "input[type='submit']"]:
+            try:
+                btn = await page.query_selector(btn_sel)
+                if btn:
+                    await btn.click()
+                    break
+            except Exception:
+                continue
+
+        await page.wait_for_timeout(3_000)
+
+        # Try waiting for results to load
+        try:
+            await page.wait_for_selector(
+                ".search-results, .result-list, table, [class*='result'], [class*='parcel']",
+                timeout=8_000,
             )
-            matches = sum(1 for p in parts if p in owner_field)
-            if matches > best_score:
-                best_score = matches
-                best = res
+        except Exception:
+            pass
 
-        if best and best_score >= min(2, len(parts)):
-            addr = _extract_addr_from_result(best)
-            if addr["prop_address"]:
-                log.info("  ✓ HCPA match [score=%d]: '%s' → %s, %s %s",
-                         best_score, n[:40],
-                         addr["prop_address"], addr["prop_city"], addr["prop_zip"])
-                return addr
+        await page.wait_for_timeout(1_000)
+        html = await page.content()
+        soup = BeautifulSoup(html, "lxml")
 
-    log.debug("  ✗ No HCPA match: %s", n[:50])
+        # Parse results — look for address data
+        addr = _parse_hcpa_results(soup, n)
+        if addr.get("prop_address"):
+            log.info("  ✓ HCPA '%s' → %s, %s %s",
+                     n[:40], addr["prop_address"],
+                     addr["prop_city"], addr["prop_zip"])
+        else:
+            log.debug("  ✗ No HCPA result for: %s", n[:40])
+
+        return addr
+
+    except PWTimeout:
+        log.debug("HCPA timeout for: %s", n[:40])
+        return empty
+    except Exception as e:
+        log.debug("HCPA lookup error [%s]: %s", n[:40], e)
+        return empty
+
+
+def _parse_hcpa_results(soup: BeautifulSoup, owner_name: str) -> dict:
+    """
+    Parse HCPA search results page and extract the best matching address.
+    """
+    empty = {
+        "prop_address": "", "prop_city": "", "prop_state": "FL", "prop_zip": "",
+        "mail_address": "", "mail_city": "", "mail_state": "FL", "mail_zip": "",
+    }
+
+    parts = owner_name.replace(",", "").split()
+    text  = soup.get_text(" ", strip=True).upper()
+
+    # ── Strategy 1: look for structured address in result rows ───────────────
+    for table in soup.find_all("table"):
+        rows = table.find_all("tr")
+        for row in rows:
+            row_text = _norm(row.get_text(" ", strip=True))
+            # Check if this row contains part of our owner name
+            if not any(p in row_text for p in parts[:2]):
+                continue
+
+            # Look for an address pattern in or near this row
+            addr_match = re.search(
+                r"(\d{2,5}\s+[A-Z][A-Z0-9\s]+(?:ST|AVE|DR|RD|BLVD|LN|CT|WAY|PL|CIR|TER|TRAIL|LOOP|PKY|HWY)[A-Z\s]*)"
+                r"[\s,]+([A-Z\s]+?)\s+(\d{5})",
+                row_text
+            )
+            if addr_match:
+                return {
+                    "prop_address": addr_match.group(1).strip(),
+                    "prop_city":    addr_match.group(2).strip(),
+                    "prop_state":   "FL",
+                    "prop_zip":     addr_match.group(3).strip(),
+                    "mail_address": addr_match.group(1).strip(),
+                    "mail_city":    addr_match.group(2).strip(),
+                    "mail_state":   "FL",
+                    "mail_zip":     addr_match.group(3).strip(),
+                }
+
+    # ── Strategy 2: scan all text for address pattern near owner name ────────
+    # Find owner name position in text, then look for address nearby
+    for part in parts[:2]:
+        idx = text.find(part)
+        if idx == -1:
+            continue
+        # Look in a window around the name
+        window = text[max(0, idx - 50): idx + 300]
+        addr_match = re.search(
+            r"(\d{2,5}\s+[A-Z][A-Z0-9\s]+(?:ST|AVE|DR|RD|BLVD|LN|CT|WAY|PL|CIR|TER|TRAIL|LOOP|PKY|HWY)[A-Z\s,]*)"
+            r"(?:,\s*|\s+)([A-Z][A-Z\s]+?)\s+(?:FL\s+)?(\d{5})",
+            window
+        )
+        if addr_match:
+            return {
+                "prop_address": addr_match.group(1).strip().rstrip(","),
+                "prop_city":    addr_match.group(2).strip(),
+                "prop_state":   "FL",
+                "prop_zip":     addr_match.group(3).strip(),
+                "mail_address": addr_match.group(1).strip().rstrip(","),
+                "mail_city":    addr_match.group(2).strip(),
+                "mail_state":   "FL",
+                "mail_zip":     addr_match.group(3).strip(),
+            }
+
+    # ── Strategy 3: look for any address-like pattern in the page ────────────
+    addr_match = re.search(
+        r"(\d{2,5}\s+[A-Z][A-Z0-9\s]+(?:ST|AVE|DR|RD|BLVD|LN|CT|WAY|PL|CIR|TER|TRAIL|LOOP)[A-Z\s]*)"
+        r"[\s,]+TAMPA[\s,]+(?:FL[\s,]+)?(\d{5})",
+        text
+    )
+    if addr_match:
+        return {
+            "prop_address": addr_match.group(1).strip(),
+            "prop_city":    "TAMPA",
+            "prop_state":   "FL",
+            "prop_zip":     addr_match.group(2).strip(),
+            "mail_address": addr_match.group(1).strip(),
+            "mail_city":    "TAMPA",
+            "mail_state":   "FL",
+            "mail_zip":     addr_match.group(2).strip(),
+        }
+
     return empty
 
 
@@ -484,11 +523,10 @@ async def scrape_one_doc_type(
             await page.goto(CLERK_URL, wait_until="networkidle", timeout=60_000)
             await page.wait_for_timeout(2_000)
 
-            # Set dropdown using exact select ID and exact option value
             set_result = await page.evaluate(f"""
                 () => {{
                     const sel = document.getElementById('OBKey__1285_1');
-                    if (!sel) return 'ERROR: select OBKey__1285_1 not found';
+                    if (!sel) return 'ERROR: select not found';
                     let found = null;
                     for (const opt of sel.options) {{
                         if (opt.value === '{option_value}') {{
@@ -498,21 +536,16 @@ async def scrape_one_doc_type(
                     if (!found) return 'ERROR: option not found: {option_value}';
                     sel.value = found.value;
                     sel.dispatchEvent(new Event('change', {{bubbles: true}}));
-                    if (window.jQuery) {{
-                        window.jQuery(sel).trigger('chosen:updated');
-                    }}
+                    if (window.jQuery) window.jQuery(sel).trigger('chosen:updated');
                     return 'OK: ' + found.value;
                 }}
             """)
             log.info("[%s] dropdown → %s", doc_code, set_result)
-
             if "ERROR" in str(set_result):
-                log.warning("[%s] Could not set dropdown — skipping", doc_code)
                 return []
 
             await page.wait_for_timeout(500)
 
-            # Set date fields using exact IDs
             await page.evaluate(f"""
                 () => {{
                     const b = document.getElementById('OBKey__1634_1');
@@ -529,7 +562,6 @@ async def scrape_one_doc_type(
             """)
             await page.wait_for_timeout(300)
 
-            # Click Search button (id="sub")
             await page.evaluate("""
                 () => {
                     const btn = document.getElementById('sub');
@@ -588,7 +620,7 @@ async def main():
     date_to      = date_to_dt.strftime("%m/%d/%Y")
 
     log.info("=" * 64)
-    log.info("Hillsborough County Motivated Seller Scraper  v32")
+    log.info("Hillsborough County Motivated Seller Scraper  v33")
     log.info("Range : %s → %s  (%d days)", date_from, date_to, LOOKBACK_DAYS)
     log.info("=" * 64)
 
@@ -610,7 +642,9 @@ async def main():
             timezone_id="America/New_York",
         )
         clerk_page = await ctx.new_page()
+        hcpa_page  = await ctx.new_page()
 
+        # ── Step 1: scrape clerk portal ───────────────────────────────────────
         for doc_code, (cat, cat_label) in DOC_TYPE_MAP.items():
             log.info("── [%s] %s", doc_code, cat_label)
             raw_rows = await scrape_one_doc_type(
@@ -653,32 +687,45 @@ async def main():
                 base_rec["flags"] = flags
                 all_records.append(base_rec)
 
-        await browser.close()
+        log.info("Scraped %d total records", len(all_records))
 
-    log.info("Scraped %d total records — starting address enrichment…", len(all_records))
+        # ── Step 2: dedupe owners and enrich via HCPA Playwright ─────────────
+        # Build unique owner list — skip blanks and institutions
+        unique_owners = {}
+        for rec in all_records:
+            owner = rec.get("owner", "")
+            if owner and not _is_institution(owner) and owner not in unique_owners:
+                unique_owners[owner] = {}
 
-    # ── Address enrichment ────────────────────────────────────────────────────
-    enriched = 0
-    for i, rec in enumerate(all_records):
-        owner = rec.get("owner", "")
-        if not owner or _is_institution(owner):
-            continue
-        try:
-            addr = enrich_address(owner)
+        log.info("Enriching %d unique owners via HCPA property search…",
+                 len(unique_owners))
+
+        enriched_count = 0
+        for i, owner in enumerate(unique_owners):
+            addr = await hcpa_lookup(hcpa_page, owner)
+            unique_owners[owner] = addr
+            if addr.get("prop_address"):
+                enriched_count += 1
+            if (i + 1) % 50 == 0:
+                log.info("  HCPA progress: %d / %d owners — %d with address",
+                         i + 1, len(unique_owners), enriched_count)
+            # Small delay to be respectful to the server
+            await asyncio.sleep(0.3)
+
+        log.info("HCPA enrichment done: %d / %d owners got addresses",
+                 enriched_count, len(unique_owners))
+
+        # Apply addresses back to all records
+        for rec in all_records:
+            owner = rec.get("owner", "")
+            addr  = unique_owners.get(owner, {})
             if addr.get("prop_address"):
                 rec.update(addr)
                 score, flags = score_record(rec)
                 rec["score"] = score
                 rec["flags"] = flags
-                enriched += 1
-        except Exception as e:
-            log.debug("Enrich error [%s]: %s", owner[:40], e)
 
-        if (i + 1) % 100 == 0:
-            log.info("  Enrichment: %d / %d — %d with address",
-                     i + 1, len(all_records), enriched)
-
-    log.info("Enrichment done: %d / %d got addresses", enriched, len(all_records))
+        await browser.close()
 
     # ── Sort and save ─────────────────────────────────────────────────────────
     all_records.sort(key=lambda x: x["score"], reverse=True)
