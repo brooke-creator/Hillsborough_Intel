@@ -1,0 +1,652 @@
+<!DOCTYPE html><html lang="en"><head>
+      
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Official Records Public Search | Hillsborough County Clerk of Circuit Courts</title>
+
+        <!-- Dependencies Begin -->
+		<link rel="stylesheet" href="../res/dep/bootstrap/4.5.2/css/bootstrap.min.css">
+		<link rel="stylesheet" href="../res/dep/bootstrap-datepicker/1.9.0/css/bootstrap-datepicker.min.css">
+		<link rel="stylesheet" href="../res/dep/fontawesome/5.15.1/css/all.css">
+		<link rel="stylesheet" href="../res/dep/chosen/1.8.7/chosen.min.css">
+		<link rel="stylesheet" href="../res/dep/fancybox/3.5.7/jquery.fancybox.min.css">
+		<link rel="stylesheet" href="../res/dep/jsgrid/1.5.3/jsgrid.min.css">
+		<link rel="stylesheet" href="../res/dep/jsgrid/1.5.3/jsgrid-theme.min.css">
+		<link rel="stylesheet" href="../res/css/brand_demo.css">
+		<link rel="stylesheet" href="../res/css/pav_demo.css">
+        <script src="../res/dep/jquery/3.4.1/jquery.min.js"></script>
+		<script src="../res/dep/moment/2.24.0/moment.min.js"></script>
+        <script src="../res/dep/bootstrap/4.5.2/js/bootstrap.bundle.min.js"></script>
+        <script src="../res/dep/bootstrap-datepicker/1.9.0/js/bootstrap-datepicker.min.js"></script>
+		<script src="../res/dep/fancybox/3.5.7/jquery.fancybox.min.js"></script>	
+		<script src="../res/dep/chosen/1.8.7/chosen.jquery.min.js"></script>
+		<script src="../res/dep/URLSearchParams/polyfill.js"></script>
+		<script src="../res/dep/jsgrid/1.5.3/jsgrid.min.js"></script>
+
+		<!-- Dependencies End -->
+				
+    <script src="../res/dep/browser-update/update.min.js"></script><link rel="stylesheet" type="text/css" href="https://wsv3cdn.audioeye-services.com/static-scripts/v2/2026-04-23/compliance.css"><link rel="stylesheet" type="text/css" href="https://wsv3cdn.audioeye-services.com/static-scripts/v2/2026-04-23/fullCSS.bundle.css"><style>
+      .audioeye-skip-link {
+        display: inline-block !important;
+        position: absolute;
+        left: -9999px;
+        overflow: hidden;
+        top: auto;
+        width: 1px;
+        height: 1px;
+        z-index: 50000 !important;
+      }
+      .audioeye-skip-link:focus, .audioeye-skip-link:active {
+        left: 0;
+        width: auto;
+        height: auto;
+        background: #fff;
+        color: #000;
+        font-size: 14px;
+        font-weight: normal;
+        line-height: 1.5;
+        margin-bottom: 8px;
+        padding: 5px;
+        border: 3px solid #000;
+        transition: none;
+      }
+    </style></head>
+    <body class="d-flex flex-column min-vh-100 vh-100" data-audioeye-device-desktop="" data-audioeye-launcher=""><a href="#ae-skip-to-content" class="audioeye-skip-link">Skip To Main Content</a><div id="ae_enabled_site" class="ae-blurb-noaudio" role="status" aria-live="polite" data-nosnippet="" style="display: none;"><div><p data-modulename="launcher">This website is AudioEye enabled and is being optimized for accessibility. To open the AudioEye Toolbar, press "shift + =". Some assistive technologies may require the use of a passthrough function before this keystroke. For more information, activate the button labeled "Explore your accessibility options".</p></div></div><header class="mb-1 pav-header hide-print sticky-top">
+	<div style="width:100%; overflow:hidden;">
+		<div>
+		<!-- <div class="row mb-0 my-0 h-100"> -->
+		<!-- <div id="headerShield" style=""></div> -->
+		<div id="" style=""><img title="Victor Crist Clerk of Court &amp; Comptroller Hillsborough County Logo" alt="Victor Crist Clerk of Court &amp; Comptroller Hillsborough County" width="100%" class="mx-auto d-block img-fluid" src="../res/img/PAV_banner.png"></div>
+		<div class="col-12">
+			<div class="row justify-content-center align-items-center py-1 hide-mobile" style="background-color: #A2C6D3;">
+				<div class="col-lg-3 col-md-3 col-sm-3 col-xs-12 mb-0 my-0 text-right" style="height:40%; width:100%;">
+					<!-- <img class="mx-3 img-fluid" src="../res/img/signature.svg"> -->
+				</div>
+				<div class="col-lg-4 col-md-4 col-sm-4 col-xs-12 mb-0 my-0 text-left">
+					<!-- <span style="font-weight:400; color:#196f8b;">INTEGRITY. TRANSPARENCY. ACCOUNTABILITY.</span> -->
+				</div>
+			</div>
+			<div class="row my-0 py-0 hide-mobile">
+				<div class="col-12 mb-0 my-0 text-left" style="height:2%; width:100%; line-height: .25em !important; background-color: #171B45; overflow: hidden;">
+					&nbsp;
+				</div>
+			</div>
+			<div class="row mb-0 align-items-center" style="background-color: #171B45;">
+				<div class="col-8 col-sm-7 col-md-8 col-lg-9 mb-0 my-0 pb-1 text-left" style="height:35%; width:100%; background-color: #171B45;">
+					<div id="oriHeader" class="my-1"><h1 style="color: white; font-size: large;">Official Records Public Search</h1></div>
+				</div>
+				<div class="col-4 col-sm-5 col-md-4 col-lg-3 text-right py-1 align-items-center" style="background-color: #171B45;">
+					<div class="row py-0 px-3">
+						<div class="col-6 px-1">
+							<button type="button" id="btnCart" class="btn btn-sm btn-light btn-block ecertify px-0 py-0" title="Search for documents and add to your cart to purchase certified copies">
+								<span id="itemsInCart" class="cart-number-items my-0" style="display:none;">0</span>
+								<i class="fas fa-lg fa-shopping-cart" role="presentation"></i>
+								<span class="font-weight-bold btn-text ml-2">Cart</span>
+							</button>
+						</div>
+						<div class="col-6 px-1 py-0 log-inout-placeholder">
+							<button type="button" id="btnShowLogin" class="btn btn-sm btn-light btn-block px-0 my-0 py-0" title="Log in to view subscription-only documents">
+								<i class="fas fa-lg fa-sign-in-alt" role="presentation"></i>
+								<span class="font-weight-bold btn-text ml-2">Login</span>
+							</button>
+							<a id="btnLogOff" class="btn btn-sm btn-light btn-block px-0 my-0 py-0" title="Log out of the subscription search system" style="display: none;">
+								<i class="fas fa-lg fa-sign-out-alt" role="presentation"></i>
+								<span class="font-weight-bold btn-text ml-2">Logout</span>
+							</a>
+						</div>
+					</div>
+				</div>
+			</div>
+			<div class="row align-items-center mb-2">
+				<div class="col-12 mb-0 mt-0 py-1 text-center" style="height:20%; width:100%; background-color: #ffffff; border-bottom: 1px solid; border-color: #2d5681;">
+					<span class="hide-mobile">
+						<!-- <span class="mx-2" style="font-weight:600;">CLERK OF COURT & COMPTROLLER</span> -->
+						<!-- <span class="dot"></span> -->
+						<!-- <span class="mx-2">HILLSBOROUGH COUNTY, FLORIDA</span> -->
+					</span>
+					<span class="hide-non-mobile">
+						<span class="mx-1" style="font-weight:600;">HILLSBOROUGH COUNTY CLERK OF COURT &amp; COMPTROLLER</span>
+					</span>
+				</div>
+			</div>
+		</div>
+		</div>
+	</div>
+</header>
+
+
+<main class="content-main container-fluid justify-content-center" id="ae-skip-to-content" tabindex="-1">
+	<div class="search-details row hide-print">
+		<div class="search-parameters col-sm-12 col-md-12 col-lg-7 mb-2">
+			<div class="row">
+				<div class="search-types col-sm-4 col-md-4 col-lg-4 hide-if-results">
+					<div class="card border-dark mb-2">
+						<button class="card-header bg-dark text-light py-1 w-100 text-left border-0" data-toggle="collapse" data-target="#searchTypes" aria-expanded="true" aria-controls="searchTypes" type="button">
+							<strong><i class="fas fa-chevron-down mr-2" role="presentation"></i><i class="fas fa-chevron-right mr-2" role="presentation"></i> Search Types</strong>
+						</button>
+						<div id="searchTypes" class="card-body collapse show">
+						<div queryid="319" id="ORI-Book/Page" seq="1" data-desc="Official Records: Search recorded documents by book type and book and page #" class="search-type-link">Book/Page</div><div queryid="350" id="ORI-Case #" seq="2" data-desc="Official Records: Search recorded documents by case number" class="search-type-link">Case #</div><div queryid="327" id="ORI-Date" seq="3" data-desc="Official Records: Search recorded documents by recording date" class="search-type-link">Date</div><div queryid="322" id="ORI-Document Type" seq="4" data-desc="Official Records: Search recorded documents by document type" class="search-type-link">Document Type</div><div queryid="323" id="ORI-DP Name and DOB" seq="5" data-desc="Official Records: Search recorded domestic partnership documents by name and date of birth" class="search-type-link">DP Name and DOB</div><div queryid="317" id="ORI-DP Registration #" seq="6" data-desc="Official Records: Search recorded domestic partnership documents by registration #" class="search-type-link">DP Registration #</div><div queryid="320" id="ORI-Instrument #" seq="8" data-desc="Official Records: Search recorded documents by instrument #" class="search-type-link">Instrument #</div><div queryid="321" id="ORI-Legal Search" seq="9" data-desc="Official Records: Search recorded documents by legal description" class="search-type-link">Legal Search</div><div queryid="318" id="ORI-Marriage Documents" seq="10" data-desc="Official Records: Search recorded documents for marriage records" class="search-type-link">Marriage Documents</div><div queryid="326" id="ORI-Name" seq="11" data-desc="Official Records: Search recorded documents by party name" class="search-type-link active">Name</div><div queryid="325" id="ORI-Sales Price" seq="14" data-desc="Official Records: Search recorded documents by sales price" class="search-type-link">Sales Price</div><div queryid="326" id="ORI-Simple" class="search-type-link">Simple Searches</div></div>
+					    <div class="p-2">
+						<strong>
+							<a href="https://kofilequicklinks.com/HillsboroughFL/" target="_blank" aria-describedby="audioeye_new_window_message">
+								ARCHIVED RECORDS
+							</a>
+							<ul>
+								<li>Marriage Licenses 1846-1972</li>
+								<li>Deed Indexes and Records 1846-1957</li>
+								<li>Official Records Indexes 1958-1966</li>
+							</ul>
+						</strong>
+					</div>
+				</div>
+				</div>
+				<div class="search-fields col-sm-8 col-md-8 col-lg-8 hide-if-results">
+					<div class="card border-primary">
+						<button class="card-header bg-primary text-light py-1 w-100 text-left border-0" data-toggle="collapse" data-target="#searchFieldsBody" aria-expanded="true" aria-controls="searchFieldsBody" type="button">
+							<strong><i class="fas fa-chevron-down mr-2" role="presentation"></i><i class="fas fa-chevron-right mr-2" role="presentation"></i> Search Fields</strong>
+						</button>
+						<div class="card-body pb-2 collapse show" id="searchFieldsBody">
+							<div class="card text-center bg-light mb-2">
+								<label class="querydesc text-center font-weight-bold" id="searchDescription">Official Records: Search recorded documents by party name</label>
+								<div id="searchSimple"></div>
+							</div>
+							<form>
+								<div id="queryFieldsDiv" class="form-group"><div class="form-group"><label class="font-weight-bold" for="ORI - Person Type">Person Type</label><select class="form-control form-control-sm person-type for-chosen searchField AlphaNumericSingleTable" id="OBKey__1661_1" maxlength="15" name="OBKey__1661_1" style="display: none;"><option value=""></option><option value="PARTY 1">Direct Party</option><option value="PARTY 2">Reverse Party</option></select><div class="chosen-container chosen-container-single" title="" id="OBKey__1661_1_chosen" style="width: 100%;"><a class="chosen-single chosen-default" role="button" tabindex="0">
+  <span>Select an Option</span>
+  <div><b role="presentation"></b></div>
+</a>
+<div class="chosen-drop">
+  <div class="chosen-search">
+    <label id="label_chosen_input_OBKey__1661_1" for="chosen_input_OBKey__1661_1" class="sr-only" style="position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); border:0;"> Search</label><input class="chosen-search-input" type="text" autocomplete="off" id="chosen_input_OBKey__1661_1">
+  </div>
+  <ul class="chosen-results" role="presentation"></ul>
+</div></div></div><div class="form-group row"><div class="col-xs-6 col-md-6 col-lg-6"><label class="font-weight-bold" for="nameLastBusiness">Last / Business Name</label><input type="text" autofocus="autofocus" placeholder="Last or Business Name" class="form-control form-control-sm search-name last-bus-name searchField AlphaNumericSingleTable" id="OBKey__486_1" maxlength="100" name="OBKey__486_1" aria-label="Last or Business Name"></div><div class="col-xs-6 col-md-6 col-lg-6"><label class="font-weight-bold" for="nameFirst">First Name</label><input type="text" placeholder="First or First Middle" class="form-control form-control-sm search-name first-name searchField AlphaNumericSingleTable" id="OBKey__486_2" maxlength="100" name="OBKey__486_2" aria-label="First or First Middle"></div></div><div class="form-group"><label class="font-weight-bold" for="OBKey__1285_1" maxlength="100" name="OBKey__1285_1">Document Type</label><select multiple="" class="form-control form-control-sm doc-type for-chosen searchField AlphaNumericSingleTable" id="OBKey__1285_1" maxlength="100" name="OBKey__1285_1" style="display: none;"><option value=""></option><option value="(AFF) AFFIDAVIT">(AFF) AFFIDAVIT</option><option value="(AGR) AGREEMENT">(AGR) AGREEMENT</option><option value="(AGD) AGREEMENT AND/OR CONTRACT FOR DEED">(AGD) AGREEMENT AND/OR CONTRACT FOR DEED</option><option value="(ASG) ASSIGNMENT">(ASG) ASSIGNMENT</option><option value="(ASINT) ASSIGNMENT OF INTEREST">(ASINT) ASSIGNMENT OF INTEREST</option><option value="(ASGT) ASSIGNMENT/TAXES">(ASGT) ASSIGNMENT/TAXES</option><option value="(BND) BOND">(BND) BOND</option><option value="(CTF) CERTIFICATE">(CTF) CERTIFICATE</option><option value="(CCJ) CERTIFIED COPY OF A COURT JUDGMENT">(CCJ) CERTIFIED COPY OF A COURT JUDGMENT</option><option value="(CND) DECLARATION OF CONDOMINIUM">(CND) DECLARATION OF CONDOMINIUM</option><option value="(CONDO) CONDOMINIUM PLAN">(CONDO) CONDOMINIUM PLAN</option><option value="(LNCORPTX) CORP TAX LIEN FOR STATE OF FLORIDA">(LNCORPTX) CORP TAX LIEN FOR STATE OF FLORIDA</option><option value="(COHOME) COURT ORDER DETER HMSTD">(COHOME) COURT ORDER DETER HMSTD</option><option value="(CP) COURT PAPER">(CP) COURT PAPER</option><option value="(DC) DEATH CERTIFICATE">(DC) DEATH CERTIFICATE</option><option value="(D) DEED">(D) DEED</option><option value="(DPL) DEED PLAT">(DPL) DEED PLAT</option><option value="(DRCP) DOMESTIC RELATIONS COURT PAPER">(DRCP) DOMESTIC RELATIONS COURT PAPER</option><option value="(DRJUD) DOMESTIC RELATIONS JUDGMENT">(DRJUD) DOMESTIC RELATIONS JUDGMENT</option><option value="(EAS) EASEMENT">(EAS) EASEMENT</option><option value="(FIN) FINANCING STATEMENT">(FIN) FINANCING STATEMENT</option><option value="(GOV) GOVERNMENT RELATED">(GOV) GOVERNMENT RELATED</option><option value="(JUD) JUDGMENT">(JUD) JUDGMENT</option><option value="(LN) LIEN">(LN) LIEN</option><option value="(LP) LIS PENDENS">(LP) LIS PENDENS</option><option value="(MROW) MAINTAINED RIGHT OF WAY">(MROW) MAINTAINED RIGHT OF WAY</option><option value="(MAR) MARRIAGE RECORD">(MAR) MARRIAGE RECORD</option><option value="(MEDLN) MEDICAID LIEN">(MEDLN) MEDICAID LIEN</option><option value="(MIL) MILITARY DISCHARGE/SEPARATION">(MIL) MILITARY DISCHARGE/SEPARATION</option><option value="(MSUBDSURV) MINOR SUBDIVISION SURVEY">(MSUBDSURV) MINOR SUBDIVISION SURVEY</option><option value="(MOD) MODIFICATION">(MOD) MODIFICATION</option><option value="(MTG) MORTGAGE">(MTG) MORTGAGE</option><option value="(MTGNDOC) MORTGAGE NO DOC STAMPS">(MTGNDOC) MORTGAGE NO DOC STAMPS</option><option value="(MTGNT) MORTGAGE EXEMPT TAXES">(MTGNT) MORTGAGE EXEMPT TAXES</option><option value="(MTGNIT) MORTGAGE NO INTANGIBLE TAXES">(MTGNIT) MORTGAGE NO INTANGIBLE TAXES</option><option value="(MTGREV) MORTGAGE REVERSE">(MTGREV) MORTGAGE REVERSE</option><option value="(NOT) NOTICE">(NOT) NOTICE</option><option value="(NOC) NOTICE OF COMMENCEMENT">(NOC) NOTICE OF COMMENCEMENT</option><option value="(NOCCONS) NOTICE OF COMMENCEMENT CONSUMER">(NOCCONS) NOTICE OF COMMENCEMENT CONSUMER</option><option value="(NCL) NOTICE OF CONTEST OF LIEN">(NCL) NOTICE OF CONTEST OF LIEN</option><option value="(ODNPFL) ORDER DENYING PETITION FAMILY">(ODNPFL) ORDER DENYING PETITION FAMILY</option><option value="(ODRNS) ORDER OF DISMISSAL RESPONDENT NOT SERVED">(ODRNS) ORDER OF DISMISSAL RESPONDENT NOT SERVED</option><option value="(ORD) ORDER">(ORD) ORDER</option><option value="(PR) PARTIAL RELEASE">(PR) PARTIAL RELEASE</option><option value="(PL) PLAT">(PL) PLAT</option><option value="(PUR) PLAT RELATED">(PUR) PLAT RELATED</option><option value="(PRO) PROBATE DOCUMENTS">(PRO) PROBATE DOCUMENTS</option><option value="(POA) POWER OF ATTORNEY">(POA) POWER OF ATTORNEY</option><option value="(PRREL) PERSONAL REP RELEASE">(PRREL) PERSONAL REP RELEASE</option><option value="(REL) RELEASE">(REL) RELEASE</option><option value="(RELLP) RELEASE LIS PENDENS">(RELLP) RELEASE LIS PENDENS</option><option value="(REQAFF) REQUEST AFFIDAVIT">(REQAFF) REQUEST AFFIDAVIT</option><option value="(RES) RESTRICTIONS">(RES) RESTRICTIONS</option><option value="(ROWM) RIGHT OF WAY MONUMENT">(ROWM) RIGHT OF WAY MONUMENT</option><option value="(ROWR) RIGHT OF WAY RESERVATION">(ROWR) RIGHT OF WAY RESERVATION</option><option value="(ROWT) RIGHT OF WAY TRANSFER">(ROWT) RIGHT OF WAY TRANSFER</option><option value="(SAT) SATISFACTION">(SAT) SATISFACTION</option><option value="(SATCORPTX) SATISFACTION CORP TAX FOR STATE OF FL">(SATCORPTX) SATISFACTION CORP TAX FOR STATE OF FL</option><option value="(SLM) SURVEY &amp; LOCATION MAP">(SLM) SURVEY &amp; LOCATION MAP</option><option value="(TCDP) TAMPA CITY DOMESTIC PARTNERSHIP">(TCDP) TAMPA CITY DOMESTIC PARTNERSHIP</option><option value="(TAXDEED) TAX DEED">(TAXDEED) TAX DEED</option><option value="(TER) TERMINATION">(TER) TERMINATION</option><option value="(TRA) TRANSFER">(TRA) TRANSFER</option></select><div class="chosen-container chosen-container-multi" title="" id="OBKey__1285_1_chosen" style="width: 100%;"><ul class="chosen-choices">
+  <li class="search-field">
+    <label id="label_chosen_input_OBKey__1285_1" for="chosen_input_OBKey__1285_1" class="sr-only" style="position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); border:0;">Document Type Search</label><input class="chosen-search-input default" type="text" autocomplete="off" value="Optionally, choose one or more document types" id="chosen_input_OBKey__1285_1" style="width: 300.078px;">
+  </li>
+</ul>
+<div class="chosen-drop">
+  <ul class="chosen-results" role="presentation"></ul>
+</div></div></div><div class="form-group row mb-1"><div class="col pr-1"><label class="font-weight-bold" for="Recording Date Time">Recording Begin Date</label><input type="text" placeholder="MM/DD/YYYY" class="form-control form-control-sm record-begin date-time searchField DateTime" id="OBKey__1634_1" name="OBKey__1634_1" aria-label="MM/DD/YYYY"></div><div class="col quick-dates pl-1"><label class="font-weight-bold">Quick Dates</label><div class="row"><div class="col-7 pr-1"><button type="button" id="btnBegYes" class="btn btn-sm btn-outline-dark btn-dates begin-yesterday btn-block">Yesterday</button></div><div class="col-5 pl-1"><button type="button" id="btnBegTod" class="btn btn-sm btn-outline-dark btn-dates begin-today btn-block">Today</button></div></div></div></div><div class="form-group row"><div class="col pr-1"><label class="font-weight-bold" for="Recording Date Time">Recording End Date</label><input type="text" placeholder="MM/DD/YYYY" class="form-control form-control-sm record-end date-time searchField DateTime" id="OBKey__1634_2" name="OBKey__1634_2" aria-label="MM/DD/YYYY"></div><div class="col quick-dates pl-1"><label class="font-weight-bold">Quick Dates</label><div class="row"><div class="col-7 pr-1"><button type="button" id="btnEndYes" class="btn btn-sm btn-outline-dark btn-dates end-yesterday btn-block">Yesterday</button></div><div class="col-5 pl-1"><button type="button" id="btnEndTod" class="btn btn-sm btn-outline-dark btn-dates end-today btn-block">Today</button></div></div></div></div></div>
+								<div class="form-group row mt-3 text-right">
+									<div class="col"></div>
+									<div class="col search-action-buttons">
+										<div class="row">
+											<div class="col pl-1 pr-1">
+												<button type="button" class="btn btn-sm btn-outline-dark btn-block" id="reset">Reset</button>
+											</div>
+											<div class="col pl-1">
+												<button type="button" class="btn btn-sm btn-primary btn-block" id="sub">Search</button>
+											</div>
+										</div>
+									</div>
+									<div id="loading" class=""></div>
+								</div>  
+							</form>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+		
+		<div class="search-instructions col-sm-12 col-md-12 col-lg-5">
+			<div class="row">
+				<div class="search-directions col-sm-5 col-md-6 col-lg-12 mb-2">
+					<div class="card border-dark hide-if-results">
+						<button class="card-header bg-dark text-white py-1 w-100 text-left border-0" data-toggle="collapse" data-target="#searchDirectionsBody" aria-expanded="true" aria-controls="searchDirectionsBody" type="button">
+							<strong><i class="fas fa-chevron-down mr-2" role="presentation"></i><i class="fas fa-chevron-right mr-2" role="presentation"></i> Directions</strong>
+						</button>
+						<div class="card-body collapse show" id="searchDirectionsBody">
+							<div class="col-sm-12 col-md-12 col-lg-12">
+								<ol id="searchDirections"><li>(Optional) Choose Direct (Party 1) or Reverse (Party 2) names</li><li>Enter a name to search (last, first or last first)</li><li>Name must be at least 3 characters long</li><li>Use the wildcard symbol % to search for name variations of parties Example:  H%R Block Mortgage</li><li>(Optional) Select the document type(s) to search</li><li>(Optional) Enter a date range to search</li><li>Click Search</li></ol>
+							</div>
+						</div>
+					</div>
+				</div>
+				
+				
+				<div class="records-messages col-sm-7 col-md-6 col-lg-12 mb-2">
+					<div class="card border-dark">
+						<button class="card-header bg-dark text-white py-1 w-100 text-left border-0" data-toggle="collapse" data-target="#recordsMessagesBody" aria-expanded="true" aria-controls="recordsMessagesBody" type="button">
+							<strong><i class="fas fa-chevron-down mr-2" role="presentation"></i><i class="fas fa-chevron-right mr-2" role="presentation"></i> Important Message</strong>
+						</button>
+						<div class="card-body collapse show" id="recordsMessagesBody">
+							<ul class="row">
+								<div class="col-sm-12 col-md-6 col-lg-6">
+									<li><strong>COPIES OF DOCUMENTS:</strong> Document images can be printed from your PC.</li>
+									<li>Images are now available online 8/26/1964 through present.</li>
+									<li>Result status U = Unverified</li>
+									<li class="ecertify"><b role="emphasis">CERTIFIED COPIES OF DOCUMENTS</b> now available electronically for most records.
+										<button id="lnkAuthCert" class="btn btn-link p-0 m-0" style="font-size: inherit; line-height: inherit; vertical-align: baseline; display: inline; white-space: normal; text-align: left;">
+											Authenticate an existing certified document
+										</button>
+									</li>
+									<div id="modAuthCert" class="modal fade" tabindex="-1" aria-hidden="true"></div>
+								</div>
+								<div class="col-sm-12 col-md-6 col-lg-6">
+									<li><strong>Phone Center Number:</strong> 813-276-8100 Ext: 7805</li>
+									<li>Copies are $1.00 per page. Certified copies are an additional $2.00 per document. A certified copy of a Marriage License is $3.00.</li>
+									<li>Plat pages copied are $5.00 for full size.</li>
+									<li><strong>Released Through Date is: <span id="releaseDate">04/22/2026</span></strong></li>
+									<li><strong>Released Through Instrument # is: <span id="releaseInst">2026155804</span></strong></li>
+								</div>
+							</ul>
+						</div>
+					</div>
+				</div>
+				
+				<div class="records-messages2 col-sm-7 col-md-6 col-lg-12 mb-2">
+					<div class="card border-dark">
+						<button class="card-header bg-dark text-white py-1 w-100 text-left border-0" data-toggle="collapse" data-target="#recordsMessagesBody2" aria-expanded="true" aria-controls="recordsMessagesBody2" type="button">
+							<strong><i class="fas fa-chevron-down mr-2" role="presentation"></i><i class="fas fa-chevron-right mr-2" role="presentation"></i>Final Judgement for Injunction for the Protection of a Minor</strong>
+						</button>
+						<div class="card-body collapse show" id="recordsMessagesBody2">
+							<div class="row">
+								<div class="col-sm-12 col-md-6 col-lg-6" style="padding:0px;">
+									<strong style="margin-left: 40px;">Search for Injunctions</strong>
+									<ul>
+										<li>Select “Name” search type</li>
+									</ul>
+									<strong style="margin-left: 40px;">In Search Fields</strong>
+									<ul>
+										<li>Enter last name and first name</li>
+										<li>Select “(DRJUD) Domestic Relations Judgement” from the Document Type field</li>
+										<li>Click Search</li>
+									</ul>
+									<p style="margin-left: 40px;"><strong>If the document is a final judgement for injunction for the protection of a minor, the following message will be in the legal description result field “FINAL INJUNCTION FOR THE PROTECTION OF A MINOR”</strong></p>
+									<div id="modAuthCert" class="modal fade" tabindex="-1" aria-hidden="true"></div>
+								</div>
+								<div class="col-sm-12 col-md-6 col-lg-6" style="padding:0px;">
+									<strong style="margin-left: 40px;">Request the addition of a respondent</strong>
+									<ul>
+										<li>Any person has the right to request the identity of a respondent against whom a final judgement for an injunction for the protection of a minor be added to the searchable database, unless the respondent is a minor. The identity of each respondent is available for search by the general public.</li>
+										<li>Such a request can be made in writing and delivered by mail, facsimile, email or in person at any of the three Hillsborough Clerk of Court &amp; Comptroller Office locations.</li>
+									</ul>
+									<strong style="margin-left: 40px;">Office Locations:</strong>
+									<ul>
+										<li>419 Pierce, Rm 140, Tampa, FL 33602</li>
+										<li>301 N. Michigan Ave, Plant City, FL 33563</li>
+										<li>311 Pauls Dr., Suite 110, Brandon FL 33511</li>
+									</ul>
+									<strong style="margin-left: 40px;">Mailing Location:</strong>
+									<ul>
+										<li>PO Box 3249 Tampa, FL 33601</li>
+										<li class="ecertify">Email: <a id="lnkAuthCert" href="mailto:Recording@hillsclerk.com"><u>Recording@hillsclerk.com</u></a></li>
+										<li>Fax: 813-276-2114</li>
+									</ul>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+	
+	<div class="search-results row">
+		<div class="content-gap visible-lg-block visible-lg-block"></div>
+		<div class="col-md-12">
+		<!-- <div class="hide-print hide-no-results"> -->
+			<!-- <h5>Results</h5> -->
+		<!-- </div> -->
+			<div class="content-body-results" id="results">
+				<div id="dispSS" class="hide-no-results" style="display: none;"></div>
+				<!-- <div id="jsgrid-results" style="width:100%;"> -->
+				<div id="jsgrid-results" class="table-responsive">
+					<div id="resultsActionBar" class="hide-no-results" style="display: none;"></div>
+					<table class="hide-no-results" id="jsgrid-table" style="display: none;">
+						<caption class="sr-only">Search results</caption>
+					</table>
+				</div>
+			</div>
+		</div>
+	</div> 
+	
+	<div class="modal-placeholder row hide-print">
+		<div id="loginForm" class="modal fade" tabindex="-1" role="dialog" aria-labelledby="loginModalTitle" aria-modal="true" aria-hidden="true">
+			<div class="modal-dialog modal-dialog-centered">
+				<div class="modal-content">
+					<div class="modal-header px-2 py-1 bg-primary align-items-center">
+					<!-- <div class="modal-header px-2 py-2" style="background-color: #2d5681; color: white;"> -->
+						<h6 id="loginModalTitle" class="modal-title font-weight-bold text-light">Subscription Login</h6>
+						<button type="button" class="close text-light pt-2" data-dismiss="modal" aria-label="Close">
+						<span aria-hidden="true">×</span>
+						</button>
+					</div>
+					<div class="modal-body py-2 px-2">
+						<p class="small text-muted mb-2">Fields marked with an asterisk (<span class="text-danger">*</span>) are mandatory.</p>
+						<form id="formLogin" class="form-inline">
+							<div class="form-row mx-1 my-1">
+								<div class="col-12 form-group text-left">
+									<label for="uName" class="font-weight-bold col-form-label mr-2">Username<span class="text-danger" aria-hidden="true">*</span>:</label>
+									<input type="text" class="form-control-sm" id="uName" autocomplete="on" placeholder="Username" aria-required="true" required="">
+								</div>
+							</div>
+							<div class="form-row mx-1 my-1">
+								<div class="col-12 form-group text-left">
+									<label for="password" class="font-weight-bold col-form-label mr-2">Password<span class="text-danger" aria-hidden="true">*</span>:</label>
+									<input type="password" class="form-control-sm" id="pass" autocomplete="off" placeholder="Password" aria-required="true" required="" aria-label="Password">
+								</div>
+							</div>
+						</form>
+					</div>
+					<div class="modal-footer px-2 py-1">
+						<div class="row text-left w-100">
+							<div class="col text-left pl-1">
+								<span>
+									If you do not own a subscription for <b role="emphasis">Official Records</b>, please
+									<a href="https://www.hillsclerk.com/Additional-Services/Official-Records" style="font-size: inherit; line-height: inherit;">
+										review the Official Records Web Subscription Service and download the agreement
+									</a>.
+								</span>
+							</div>
+							<div class="col login-button-group">
+								<div class="row">
+									<div class="col px-1">
+										<button type="button" class="btn btn-sm btn-secondary btn-block" data-dismiss="modal">Cancel</button>
+									</div>
+									<div class="col px-1">
+										<button type="button" id="btnLogin" class="btn btn-sm btn-primary btn-block">Login</button>
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+		<div id="fancyHidden" class="container-fluid h-100 justify-content-center" style="display:none">
+			<div id="fancyContent" class="row px-0 py-0 mx-0 my-0" style="background: transparent;">
+				<div class="row h-100 px-0 py-0 mx-0 my-0">
+					<div class="col-sm-12 col-md-12 col-lg-4 py-0 px-0 mb-1" style="background: #ffffff;">
+						<div class="row px-0 py-0 mx-0 mt-0 mb-1">
+							<div class="col-sm-12 col-md-12 col-lg-12 px-0 mx-0">
+								<div class="card border-info mb-2">
+								<div class="card-header bg-info py-2"><b role="emphasis">Document Information</b></div>
+									<div class="card-body" id="dataPanel" style="background: #ffffff;">
+										<div class="row">
+											<div class="col-sm-3 col-md-4 col-lg-4 docField">Document Type:</div>
+											<div class="col-sm-9 col-md-8 col-lg-8 docValues"></div>
+										</div>
+										<div class="row">
+											<div class="col-sm-3 col-md-4 col-lg-4 docField">Recording Date:</div>
+											<div class="col-sm-9 col-md-8 col-lg-8 docValues"></div>
+										</div>
+										<div class="row">
+											<div class="col-sm-3 col-md-4 col-lg-4 docField">Grantor:</div>
+											<div class="col-sm-9 col-md-8 col-lg-8 docValues"></div>
+										</div>
+										<div class="row">
+											<div class="col-sm-3 col-md-4 col-lg-4 docField">Grantee:</div>
+											<div class="col-sm-9 col-md-8 col-lg-8 docValues"></div>
+										</div>
+										<div class="row">
+											<div class="col-sm-3 col-md-4 col-lg-4 docField">Book:</div>
+											<div class="col-sm-9 col-md-8 col-lg-8 docValues"></div>
+										</div>
+										<div class="row">
+											<div class="col-sm-3 col-md-4 col-lg-4 docField">Page:</div>
+											<div class="col-sm-9 col-md-8 col-lg-8 docValues"></div>
+										</div>
+										<div class="row">
+											<div class="col-sm-3 col-md-4 col-lg-4 docField">Legal:</div>
+											<div class="col-sm-9 col-md-8 col-lg-8 docValues"></div>
+										</div>
+										<div class="row">
+											<div class="col-sm-3 col-md-4 col-lg-4 docField">Direct link:</div>
+											<div class="col-sm-9 col-md-8 col-lg-8 docValues"></div>
+										</div>
+									</div>
+									<div class="col-12 py-2" style="background: #ffffff;">
+										<button type="button" id="btnAddToCart" class="btn btn-sm btn-outline-dark ecertify" title="Add to cart"><i class="fas fa-lg fa-shopping-cart mr-2" role="presentation"></i>Order Certified Copy</button>
+									</div>
+									<div class="col-12 text-danger pb-2 style=" background:="" #ffffff;""=""><b role="emphasis">Notes:</b>
+										<ul>
+											<li>Large documents may load slowly</li>
+											<li>For best results when printing, save the document and print using your system PDF viewer (such as Acrobat Reader)</li>
+										</ul>
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+					<div class="col-sm-12 col-md-12 col-lg-8 h-100 py-0 px-1">
+						<div class="card border-primary px-0 py-0 mx-0 my-0 h-100">
+							<div class="card-header bg-primary text-light py-2"><b role="emphasis">Document</b></div>
+							<div class="card-body px-0 py-0 h-100">
+								<iframe title="Document Preview" id="docDisplay" class="h-100 w-100 mx-0 my-0" tabindex="-1"></iframe>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+		<div id="cartHidden" class="container-fluid justify-content-center" style="display:none;">
+			<div id="cartContent" class="py-0 px-0" style="background: transparent;">
+				<div class="col-sm-12 col-md-12 col-lg-12 px-0 py-0">
+					<div class="card border-primary mb-2">
+						<div class="card-header bg-primary text-light py-2"><b role="emphasis">Shopping Cart</b></div>
+						<div class="card-body pb-2">
+							<div id="cart-container">
+								<table id="cart-table" class="mb-2 jsgrid" style="table-layout: fixed; position: relative; height: auto; width: 100%;" role="presentation"><div class="jsgrid-grid-header"><table class="jsgrid-table"><tr class="jsgrid-header-row"><th class="jsgrid-header-cell tdID">Index</th><th class="jsgrid-header-cell tdUUID">UUID</th><th class="jsgrid-header-cell cartAction jsgrid-align-center" style="width: 50px;">Action</th><th class="jsgrid-header-cell cartInstrument jsgrid-header-sortable">Instrument #</th><th class="jsgrid-header-cell tdDocType jsgrid-header-sortable">Document</th><th class="jsgrid-header-cell cartPages jsgrid-header-sortable">Pages</th><th class="jsgrid-header-cell cartPageCost jsgrid-header-sortable">Per Page Cost</th><th class="jsgrid-header-cell cartClerkFee jsgrid-header-sortable">Clerk Fee</th><th class="jsgrid-header-cell cartECertifyFee jsgrid-header-sortable">ECertify Fee</th><th class="jsgrid-header-cell cartTotalCost jsgrid-header-sortable">Sub-Total</th></tr><tr class="jsgrid-filter-row" style="display: none;"><td class="jsgrid-cell tdID"></td><td class="jsgrid-cell tdUUID"></td><td class="jsgrid-cell cartAction jsgrid-align-center" style="width: 50px;"><input class="jsgrid-button jsgrid-search-button" type="button" title="Search"><input class="jsgrid-button jsgrid-clear-filter-button" type="button" title="Clear filter"></td><td class="jsgrid-cell cartInstrument"><input type="text"></td><td class="jsgrid-cell tdDocType"><input type="text"></td><td class="jsgrid-cell cartPages"><input type="text"></td><td class="jsgrid-cell cartPageCost"><input type="text"></td><td class="jsgrid-cell cartClerkFee"><input type="text"></td><td class="jsgrid-cell cartECertifyFee"><input type="text"></td><td class="jsgrid-cell cartTotalCost"><input type="text"></td></tr><tr class="jsgrid-insert-row" style="display: none;"><td class="jsgrid-cell tdID"><input type="text"></td><td class="jsgrid-cell tdUUID"><input type="text"></td><td class="jsgrid-cell cartAction jsgrid-align-center" style="width: 50px;"><input class="jsgrid-button jsgrid-insert-button" type="button" title="Insert"></td><td class="jsgrid-cell cartInstrument"><input type="text"></td><td class="jsgrid-cell tdDocType"><input type="text"></td><td class="jsgrid-cell cartPages"><input type="text"></td><td class="jsgrid-cell cartPageCost"><input type="text"></td><td class="jsgrid-cell cartClerkFee"><input type="text"></td><td class="jsgrid-cell cartECertifyFee"><input type="text"></td><td class="jsgrid-cell cartTotalCost"><input type="text"></td></tr></table></div><div class="jsgrid-grid-body"><table class="jsgrid-table"><tbody><tr class="jsgrid-nodata-row"><td class="jsgrid-cell" colspan="10"><td><h6 style="color:#a3a19a;"><b role="emphasis">No documents in the cart</b></h6></td></td></tr></tbody></table></div><div class="jsgrid-pager-container" style="display: none;"><div class="jsgrid-pager">Pages: <span class="jsgrid-pager-nav-button jsgrid-pager-nav-inactive-button"><a href="javascript:void(0);">First</a></span> <span class="jsgrid-pager-nav-button jsgrid-pager-nav-inactive-button"><a href="javascript:void(0);">Prev</a></span>  <span class="jsgrid-pager-nav-button jsgrid-pager-nav-inactive-button"><a href="javascript:void(0);">Next</a></span> <span class="jsgrid-pager-nav-button jsgrid-pager-nav-inactive-button"><a href="javascript:void(0);">Last</a></span> &nbsp;&nbsp; 1 of 0 </div></div><div class="jsgrid-load-shader" style="display: none; position: absolute; inset: 0px; z-index: 1000;"></div><div class="jsgrid-load-panel" style="display: none; position: absolute; top: 50%; left: 50%; z-index: 1000;">Please, wait...</div></table>
+								<p style="mx-2 my-2">
+									<i role="emphasis">* Please note that an additional credit card fee of 3.5% will be added to this sub-total by our payment processor.</i>
+									<br><br>
+									<i role="emphasis">Review all documents in your shopping cart prior to purchase as <b role="emphasis">no refunds will be issued once payment is made</b>. Please make sure your email address is correctly entered, as your document download links will be sent to this email address.</i>
+								</p>
+								<hr aria-hidden="true">
+							</div>
+							<div id="customer-info">
+								<form class="ng-pristine" novalidate="">
+									<div id="cartFields"> 
+										<div class="form-row mb-2">
+											<div class="col-xs-12 col-md-5 col-lg-5">
+												<label class="font-weight-bold" for="nameFirst">First Name <span style="color:red;">*</span></label>
+												<input type="text" id="nameFirst" placeholder="" class="form-control cart-name-first">
+											</div>
+											<div class="col-xs-12 col-md-7 col-lg-7">
+												<label class="font-weight-bold" for="nameLast">Last Name <span style="color:red;">*</span></label>
+												<input type="text" id="nameLast" placeholder="" class="form-control cart-name-last">
+											</div>
+										</div>
+										<div class="form-row mb-2">
+											<div class="col-xs-12 col-md-2 col-lg-2 mb-1">
+												<label class="font-weight-bold" for="phoneNumber">Phone Number <span style="color:red;">*</span></label>
+												<input type="text" id="phoneNumber" placeholder="555-555-5555" pattern="" class="form-control cart-phone-number">
+											</div>
+											<div class="col-xs-12 col-md-5 col-lg-5 mb-1">
+												<label class="font-weight-bold" for="emailAddress">Email Address <span style="color:red;">*</span></label>
+												<input type="text" id="emailAddress" placeholder="" class="form-control cart-email-address">
+											</div>
+											<div class="col-xs-12 col-md-5 col-lg-5 mb-1">
+												<label class="font-weight-bold" for="confirmEmailAddress">Confirm Email Address <span style="color:red;">*</span></label>
+												<input type="text" id="confirmEmailAddress" placeholder="" class="form-control cart-email-confirm">
+											</div>
+										</div>
+										<div class="form-row">
+											<p class="small text-muted mb-2">Fields marked with an asterisk (<span class="text-danger">*</span>) are mandatory.</p>
+										</div>
+									</div>
+									<div class="row">
+										<div class="col text-right">
+											<span class="font-italic">Checking out will leave our website and load our payment processor's website where you can complete your purchase.</span>
+										</div>
+										<div class="col btn-buy-col">
+											<div class="btn-group">
+												<button type="button" class="btn btn-sm btn-primary" id="btnBuy" disabled="disabled"><i class="fas fa-credit-card mr-2" role="presentation"></i>CHECKOUT</button>
+											</div>  
+										</div>
+									</div>
+									<div class="row">
+										<div id="cartStatusMessage" class="col-xs-12 col-md-12 col-lg-12" style="margin-top: 10px;"></div>
+									</div>
+								</form>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>  
+</main>
+
+
+
+
+
+
+
+
+
+
+
+<div class="search-details">
+	<div class="records-messages3 col-sm-7 col-md-6 col-lg-12 mb-2">
+						<div class="card border-dark">
+							<button class="card-header bg-dark text-white  py-1 w-100 text-left border-0" data-toggle="collapse" data-target="#recordsMessagesBody3" aria-expanded="true" aria-controls="recordsMessagesBody3" type="button">
+								<strong><i class="fas fa-chevron-down mr-2" role="presentation"></i><i class="fas fa-chevron-right mr-2" role="presentation"></i> Tampa Bay History Center Touchton Map Library</strong>
+							</button>
+						<div class="card-body collapse show" id="recordsMessagesBody3">
+							<div class="row">
+								<div class="col-sm-12 col-md-6 col-lg-12" style="padding:0px;">
+									
+									<div><strong>If you would like to view more historical maps of Florida and Hillsborough County please visit the Tampa Bay History Center Touchton Map Library. <a id="" href="https://tampabayhistorycenter.org/exhibit/touchton-map-library/">https://tampabayhistorycenter.org/exhibit/touchton-map-library</a>
+The map library is home to thousands of maps, charts, and other documents dating back from the early European exploration of North America more than 500 years ago up through the early 21st century. This collection includes some maps from the Clerk's records dating back to the late 1800s.
+									
+									</strong></div><strong>
+									<div id="modAuthCert" class="modal fade" tabindex="-1" aria-hidden="true"></div>
+								</strong></div><strong>
+							</strong></div><strong>
+						</strong></div><strong>
+					</strong></div><strong>
+				</strong></div><strong>
+
+				<div class="records-messages4 col-sm-7 col-md-6 col-lg-12">
+					<div class="card border-dark">
+						<button class="card-header bg-dark text-white py-1 w-100 text-left border-0" data-toggle="collapse" data-target="#recordsMessagesBody4" aria-expanded="true" aria-controls="recordsMessagesBody4" type="button">
+								<strong><i class="fas fa-chevron-down mr-2" role="presentation"></i><i class="fas fa-chevron-right mr-2" role="presentation"></i> Maps Preview</strong>
+							</button>
+						<div class="card-body collapse show" id="recordsMessagesBody4">
+							<ul class="row" style="padding: 0; margin: 0;">
+								<li class="col-sm-12 col-md-6 col-lg-4" style="padding:0px; margin-bottom: 20px;">
+									<div>
+										<strong>Plat Book 1 Page 7<br>Tampa Drawn February 1853</strong> by John Jackson LS
+									</div>
+									<a href="https://luna.tampabayhistorycenter.org/luna/servlet/s/2i067r" target="_blank" aria-describedby="audioeye_new_window_message">
+										<img alt="Tampa Drawn February 1853" width="20%" src="../res/img/TampaDrawn.jpg">
+									</a>
+								</li>
+								<li class="col-sm-12 col-md-6 col-lg-4" style="padding:0px; margin-bottom: 20px;">
+									<div>
+										<strong>Plat Book 1 Page 11<br>Map of Ybor City – March 18 1886</strong>
+									</div>
+									<a href="https://luna.tampabayhistorycenter.org/luna/servlet/s/z1ajg2" target="_blank" aria-describedby="audioeye_new_window_message">
+										<img alt="Map of Ybor City" title="Map of Ybor City – March 18 1886" width="20%" src="../res/img/YBORCity.jpg">
+									</a>
+								</li>
+								<li class="col-sm-12 col-md-6 col-lg-4" style="padding:0px; margin-bottom: 20px;">
+									<div>
+										<strong>Plat Book 1 Page 8<br>East Tampa Plan or Lesleys Subdivision July 1885</strong>
+									</div>
+									<a href="https://luna.tampabayhistorycenter.org/luna/servlet/s/8w1dn2" target="_blank" aria-describedby="audioeye_new_window_message">
+										<img alt="East Tampa Plan" title="East Tampa Plan or Lesleys Subdivision July 1885 link" width="20%" src="../res/img/EastTampa.jpg">
+									</a>
+								</li>
+							</ul>
+						</div>
+					</div>
+				</div>
+
+
+</strong></div><strong>
+
+
+<footer class="mt-auto text-center py-3" style="background-color: #171B45; color: #ffffff">
+	<!-- Copyright Info -->
+	<span class="my-2">©2027 - Victor Crist, Clerk of Court &amp; Comptroller, Hillsborough County, Florida. All rights reserved.</span>
+	<!-- END Copyright Info -->
+	<hr class="content-separator" aria-hidden="true">
+	<!-- Accessibility Policy Info -->
+	<!-- <a href="https://adasitecompliancetools.com/ap.asp?h=PAVCLK" target="_blank"><img src="https://www.adasitecompliance.com/img/APolicy.png" alt="ADA Site Compliance-Accessibility Policy"></a> -->
+	<!-- <a href="https://adasitecompliancetools.com/ap.asp?h=PAVCLK [adasitecompliancetools.com]" target="_blank"><img src="https://www.adasitecompliance.com/img/APolicy.png [adasitecompliance.com]" alt="ADA Site Compliance-Accessibility Policy"></a> -->    
+	<!-- END Accessibility Policy Info -->
+</footer></strong><script type="text/javascript" src="https://wsv3cdn.audioeye-services.com/static-scripts/v2/2026-04-23/startup.bundle.js"></script><div id="ae_app" data-nosnippet="">
+    
+        <!--
+        Layout, Style or Voice Helpers
+    -->
+    <div id="ae_helpers" class="ae-module" style="display: none;">
+
+    
+    </div>
+    
+
+        <!--
+        Compliance
+    -->
+    <div id="ae_compliance" class="ae-module" style="display: none;">
+
+        <!-- For autoSmartRem addNewWindowWarnings div is referenced in an aria-describedby -->
+        <div id="audioeye_new_window_message" style="display:none">Opens in new window</div>
+        <div id="audioeye_pdf_message" style="display:none">PDF Download</div>
+        <div id="audioeye_word_message" style="display:none">Word Download</div>
+        <div id="audioeye_excel_message" style="display:none">Excel Download</div>
+        <div id="audioeye_powerpoint_message" style="display:none">PowerPoint Download</div>
+        <div id="audioeye_document_message" style="display:none">Document Download</div>
+
+                    </div>
+    
+    <!--
+        Versioning Control Panel if versioning = true !
+    -->
+        
+    <!--
+        Launcher
+    -->
+    <aside id="ae_launcher" style="display: none; bottom: 24px; inset-inline-end: 24px;" class="ae-module aetipsytip ae-active ae-cta-position-preset-right-lower" aria-label="Accessibility options" dir="ltr">
+  <button aria-label="Explore your accessibility options">
+    <div style="display: none" class="ae-left">
+      <span>Explore your accessibility options</span>
+    </div>
+
+    <div class="ae-right">
+      <span class="icomoon-wrapper">
+        <div>
+          <span class="icomoon-cta ae-icon-launcher-universalaccess ae-initial-cta">
+            <span class="icomoon-cta path1 a11y-icon-figure-and-border"></span>
+            <span class="icomoon-cta path2 a11y-icon-background" style="color: rgb(96, 46, 204);"></span>
+          </span>
+        </div>
+      </span>
+    </div>
+  </button>
+</aside>
+
+    <!-- Toolbar -->
+
+    <span id="ae_placeholder_toolbar" style="display: none;" aria-hidden="true"></span>
+
+    <!--
+        Site Menu
+    -->
+    <span id="ae_placeholder_site-menu" style="display: none;" aria-hidden="true"></span>
+
+    
+    <!--
+        Generic Aria Live message container
+    -->
+    <div class="ae-blurb-noaudio" id="ae_enabled_messages" aria-relevant="additions" aria-live="assertive"></div>
+
+    
+    <!-- Symbol definitions -->
+    <svg style="position: absolute; width: 0; height: 0; overflow: hidden;" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+        <title>close carousel</title>
+        <defs>
+            <symbol id="icon-close-carousel" viewBox="0 0 32 32">
+                <path fill="#ffffff" style="fill: var(--color1, #ffffff)" d="M28.992 0l-12.992 12.992-12.992-12.992-3.008 3.008 12.992 12.992-12.992 12.992 3.008 3.008 12.992-12.992 12.992 12.992 3.008-3.008-12.992-12.992 12.992-12.992-3.008-3.008z"></path>
+            </symbol>
+        </defs>
+    </svg>
+
+</div><!-- end #ae_app --></body><!-- AutioEye ADA Compliance Footer Plugin 3/19/2026 --></html>

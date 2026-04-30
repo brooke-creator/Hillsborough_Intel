@@ -1,0 +1,189 @@
+============================================================
+CLERK PORTAL PROBE
+============================================================
+Loading https://publicaccess.hillsclerk.com/oripublicaccess/ ...
+
+Found 2 <select> elements:
+
+  <select> id='OBKey__1661_1' name='OBKey__1661_1' class='form-control form-control-sm person-type for-chosen searchField AlphaNumericSingleTable' (3 options)
+    value=''  text=''
+    value='PARTY 1'  text='Direct Party'
+    value='PARTY 2'  text='Reverse Party'
+
+  <select> id='OBKey__1285_1' name='OBKey__1285_1' class='form-control form-control-sm doc-type for-chosen searchField AlphaNumericSingleTable' (64 options)
+    value=''  text=''
+    value='(AFF) AFFIDAVIT'  text='(AFF) AFFIDAVIT'
+    value='(AGR) AGREEMENT'  text='(AGR) AGREEMENT'
+    value='(AGD) AGREEMENT AND/OR CONTRACT FOR DEED'  text='(AGD) AGREEMENT AND/OR CONTRACT FOR DEED'
+    value='(ASG) ASSIGNMENT'  text='(ASG) ASSIGNMENT'
+    value='(ASINT) ASSIGNMENT OF INTEREST'  text='(ASINT) ASSIGNMENT OF INTEREST'
+    value='(ASGT) ASSIGNMENT/TAXES'  text='(ASGT) ASSIGNMENT/TAXES'
+    value='(BND) BOND'  text='(BND) BOND'
+    ... 56 more options
+    value='(TAXDEED) TAX DEED'  text='(TAXDEED) TAX DEED'
+    value='(TER) TERMINATION'  text='(TER) TERMINATION'
+    value='(TRA) TRANSFER'  text='(TRA) TRANSFER'
+
+── Options containing LP / LIS PENDENS ──
+  SELECT id='OBKey__1285_1' name='OBKey__1285_1' class='form-control form-control-sm doc-type for-chosen searchField AlphaNumericSingleTable'
+    option value='(CCJ) CERTIFIED COPY OF A COURT JUDGMENT'  text='(CCJ) CERTIFIED COPY OF A COURT JUDGMENT'
+  SELECT id='OBKey__1285_1' name='OBKey__1285_1' class='form-control form-control-sm doc-type for-chosen searchField AlphaNumericSingleTable'
+    option value='(LNCORPTX) CORP TAX LIEN FOR STATE OF FLORIDA'  text='(LNCORPTX) CORP TAX LIEN FOR STATE OF FLORIDA'
+  SELECT id='OBKey__1285_1' name='OBKey__1285_1' class='form-control form-control-sm doc-type for-chosen searchField AlphaNumericSingleTable'
+    option value='(DRJUD) DOMESTIC RELATIONS JUDGMENT'  text='(DRJUD) DOMESTIC RELATIONS JUDGMENT'
+  SELECT id='OBKey__1285_1' name='OBKey__1285_1' class='form-control form-control-sm doc-type for-chosen searchField AlphaNumericSingleTable'
+    option value='(JUD) JUDGMENT'  text='(JUD) JUDGMENT'
+  SELECT id='OBKey__1285_1' name='OBKey__1285_1' class='form-control form-control-sm doc-type for-chosen searchField AlphaNumericSingleTable'
+    option value='(LN) LIEN'  text='(LN) LIEN'
+  SELECT id='OBKey__1285_1' name='OBKey__1285_1' class='form-control form-control-sm doc-type for-chosen searchField AlphaNumericSingleTable'
+    option value='(LP) LIS PENDENS'  text='(LP) LIS PENDENS'
+  SELECT id='OBKey__1285_1' name='OBKey__1285_1' class='form-control form-control-sm doc-type for-chosen searchField AlphaNumericSingleTable'
+    option value='(MEDLN) MEDICAID LIEN'  text='(MEDLN) MEDICAID LIEN'
+  SELECT id='OBKey__1285_1' name='OBKey__1285_1' class='form-control form-control-sm doc-type for-chosen searchField AlphaNumericSingleTable'
+    option value='(NCL) NOTICE OF CONTEST OF LIEN'  text='(NCL) NOTICE OF CONTEST OF LIEN'
+  SELECT id='OBKey__1285_1' name='OBKey__1285_1' class='form-control form-control-sm doc-type for-chosen searchField AlphaNumericSingleTable'
+    option value='(RELLP) RELEASE LIS PENDENS'  text='(RELLP) RELEASE LIS PENDENS'
+
+── Chosen / Select2 containers ──
+  class='form-control form-control-sm person-type for-chosen searchField AlphaNumericSingleTable' id='OBKey__1661_1'
+  <select class="form-control form-control-sm person-type for-chosen searchField AlphaNumericSingleTable" id="OBKey__1661_1" maxlength="15" name="OBKey__1661_1" style="display: none;"><option value=""></option><option value="PARTY 1">Direct Party</option><option value="PARTY 2">Reverse Party</option><
+
+  class='chosen-container chosen-container-single' id='OBKey__1661_1_chosen'
+  <div class="chosen-container chosen-container-single" title="" id="OBKey__1661_1_chosen" style="width: 100%;"><a class="chosen-single chosen-default" role="button" tabindex="0">
+  <span>Select an Option</span>
+  <div><b role="presentation"></b></div>
+</a>
+<div class="chosen-drop">
+  <div class="chos
+
+  class='chosen-single chosen-default' id=''
+  <a class="chosen-single chosen-default" role="button" tabindex="0">
+  <span>Select an Option</span>
+  <div><b role="presentation"></b></div>
+</a>
+
+  class='chosen-drop' id=''
+  <div class="chosen-drop">
+  <div class="chosen-search">
+    <label id="label_chosen_input_OBKey__1661_1" for="chosen_input_OBKey__1661_1" class="sr-only" style="position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); border:0;"> Search</label><input cla
+
+  class='chosen-search' id=''
+  <div class="chosen-search">
+    <label id="label_chosen_input_OBKey__1661_1" for="chosen_input_OBKey__1661_1" class="sr-only" style="position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); border:0;"> Search</label><input class="chosen-search-input" typ
+
+
+── Input / button elements ──
+  <button> id='btnCart' name='' type='button' class='btn btn-sm btn-light btn-block ecertify px-0 py-0' value='' placeholder=None
+  <button> id='btnShowLogin' name='' type='button' class='btn btn-sm btn-light btn-block px-0 my-0 py-0' value='' placeholder=None
+  <button> id='' name='' type='button' class='card-header bg-dark text-light py-1 w-100 text-left border-0' value='' placeholder=None
+  <button> id='' name='' type='button' class='card-header bg-primary text-light py-1 w-100 text-left border-0' value='' placeholder=None
+  <input> id='chosen_input_OBKey__1661_1' name='' type='text' class='chosen-search-input' value='' placeholder=''
+  <input> id='OBKey__486_1' name='OBKey__486_1' type='text' class='form-control form-control-sm search-name last-bus-name searchField AlphaNumericSingleTable' value='' placeholder='Last or Business Name'
+  <input> id='OBKey__486_2' name='OBKey__486_2' type='text' class='form-control form-control-sm search-name first-name searchField AlphaNumericSingleTable' value='' placeholder='First or First Middle'
+  <input> id='chosen_input_OBKey__1285_1' name='' type='text' class='chosen-search-input default' value='Optionally, choose one or more document types' placeholder=''
+  <input> id='OBKey__1634_1' name='OBKey__1634_1' type='text' class='form-control form-control-sm record-begin date-time searchField DateTime' value='08/26/1964' placeholder='MM/DD/YYYY'
+  <button> id='btnBegYes' name='' type='button' class='btn btn-sm btn-outline-dark btn-dates begin-yesterday btn-block' value='' placeholder=None
+  <button> id='btnBegTod' name='' type='button' class='btn btn-sm btn-outline-dark btn-dates begin-today btn-block' value='' placeholder=None
+  <input> id='OBKey__1634_2' name='OBKey__1634_2' type='text' class='form-control form-control-sm record-end date-time searchField DateTime' value='04/30/2026' placeholder='MM/DD/YYYY'
+  <button> id='btnEndYes' name='' type='button' class='btn btn-sm btn-outline-dark btn-dates end-yesterday btn-block' value='' placeholder=None
+  <button> id='btnEndTod' name='' type='button' class='btn btn-sm btn-outline-dark btn-dates end-today btn-block' value='' placeholder=None
+  <button> id='reset' name='' type='button' class='btn btn-sm btn-outline-dark btn-block' value='' placeholder=None
+  <button> id='sub' name='' type='button' class='btn btn-sm btn-primary btn-block' value='' placeholder=None
+  <button> id='' name='' type='button' class='card-header bg-dark text-white py-1 w-100 text-left border-0' value='' placeholder=None
+  <button> id='' name='' type='button' class='card-header bg-dark text-white py-1 w-100 text-left border-0' value='' placeholder=None
+  <button> id='lnkAuthCert' name='' type='submit' class='btn btn-link p-0 m-0' value='' placeholder=None
+  <button> id='' name='' type='button' class='card-header bg-dark text-white py-1 w-100 text-left border-0' value='' placeholder=None
+  <button> id='' name='' type='button' class='close text-light pt-2' value='' placeholder=None
+  <input> id='uName' name='' type='text' class='form-control-sm' value='' placeholder='Username'
+  <input> id='pass' name='' type='password' class='form-control-sm' value='' placeholder='Password'
+  <button> id='' name='' type='button' class='btn btn-sm btn-secondary btn-block' value='' placeholder=None
+  <button> id='btnLogin' name='' type='button' class='btn btn-sm btn-primary btn-block' value='' placeholder=None
+  <button> id='btnAddToCart' name='' type='button' class='btn btn-sm btn-outline-dark ecertify' value='' placeholder=None
+  <input> id='' name='' type='button' class='jsgrid-button jsgrid-search-button' value='' placeholder=''
+  <input> id='' name='' type='button' class='jsgrid-button jsgrid-clear-filter-button' value='' placeholder=''
+  <input> id='' name='' type='text' class='' value='' placeholder=''
+  <input> id='' name='' type='text' class='' value='' placeholder=''
+  <input> id='' name='' type='text' class='' value='' placeholder=''
+  <input> id='' name='' type='text' class='' value='' placeholder=''
+  <input> id='' name='' type='text' class='' value='' placeholder=''
+  <input> id='' name='' type='text' class='' value='' placeholder=''
+  <input> id='' name='' type='text' class='' value='' placeholder=''
+  <input> id='' name='' type='text' class='' value='' placeholder=''
+  <input> id='' name='' type='text' class='' value='' placeholder=''
+  <input> id='' name='' type='button' class='jsgrid-button jsgrid-insert-button' value='' placeholder=''
+  <input> id='' name='' type='text' class='' value='' placeholder=''
+  <input> id='' name='' type='text' class='' value='' placeholder=''
+  <input> id='' name='' type='text' class='' value='' placeholder=''
+  <input> id='' name='' type='text' class='' value='' placeholder=''
+  <input> id='' name='' type='text' class='' value='' placeholder=''
+  <input> id='' name='' type='text' class='' value='' placeholder=''
+  <input> id='' name='' type='text' class='' value='' placeholder=''
+  <input> id='nameFirst' name='' type='text' class='form-control cart-name-first' value='' placeholder=''
+  <input> id='nameLast' name='' type='text' class='form-control cart-name-last' value='' placeholder=''
+  <input> id='phoneNumber' name='' type='text' class='form-control cart-phone-number' value='' placeholder='555-555-5555'
+  <input> id='emailAddress' name='' type='text' class='form-control cart-email-address' value='' placeholder=''
+  <input> id='confirmEmailAddress' name='' type='text' class='form-control cart-email-confirm' value='' placeholder=''
+  <button> id='btnBuy' name='' type='button' class='btn btn-sm btn-primary' value='' placeholder=None
+  <button> id='' name='' type='button' class='card-header bg-dark text-white  py-1 w-100 text-left border-0' value='' placeholder=None
+  <button> id='' name='' type='button' class='card-header bg-dark text-white py-1 w-100 text-left border-0' value='' placeholder=None
+  <button> id='' name='' type='submit' class='' value='' placeholder=None
+
+Page title: 'Official Records Public Search | Hillsborough County Clerk of Circuit Courts'
+Final URL:  'https://publicaccess.hillsclerk.com/oripublicaccess/'
+Full HTML saved → data/clerk_debug.html  (49,079 bytes)
+
+============================================================
+HCPA BULK DATA PROBE
+============================================================
+
+── Testing direct bulk file URLs ──
+  404          1245 bytes  text/html  https://gis.hcpafl.org/propertysearch/data/NAL_OWNER.zip
+  404          1245 bytes  text/html  https://gis.hcpafl.org/propertysearch/data/NAL.zip
+  404          1245 bytes  text/html  https://gis.hcpafl.org/propertysearch/data/NAL_ALL.zip
+  404          1245 bytes  text/html  https://gis.hcpafl.org/propertysearch/data/CAMA.zip
+  404          1245 bytes  text/html  https://hcpafl.org/data/NAL_OWNER.zip
+  404          1245 bytes  text/html  https://hcpafl.org/data/NAL.zip
+  404            13 bytes  text/html; charset=utf-8  https://www.hcpafl.org/LinkClick.aspx?fileticket=NAL
+
+── Scraping HCPA pages for download links ──
+
+  PAGE: https://hcpafl.org/About-HCPA/open-data
+    https://hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption
+    https://hcpafl.org/Downloads/Forms
+    https://hcpafl.org/Downloads/Maps-Data
+    https://hcpafl.org/LinkClick.aspx?link=%2fDownloads%2fMaps-Data&tabid=97&portalid=1&mid=575
+    https://hcpafl.org/Downloads/Maps-Data
+    https://hcpafl.org/Downloads/Forms#EXEMPTIONS
+    http://www.hillsclerk.com/Additional-Services/Property-Fraud-Alert?textHighlight=Property%20Fraud%20Alert%20Service&exp=true
+
+  PAGE: https://www.hcpafl.org/About-HCPA/open-data
+    https://www.hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption
+    https://www.hcpafl.org/Downloads/Forms
+    https://www.hcpafl.org/Downloads/Maps-Data
+    https://hcpafl.org/LinkClick.aspx?link=%2fDownloads%2fMaps-Data&tabid=97&portalid=1&mid=575
+    https://hcpafl.org/Downloads/Maps-Data
+    https://hcpafl.org/Downloads/Forms#EXEMPTIONS
+    http://www.hillsclerk.com/Additional-Services/Property-Fraud-Alert?textHighlight=Property%20Fraud%20Alert%20Service&exp=true
+
+  PAGE: https://gis.hcpafl.org/propertysearch/
+    https://hcpafl.org//hcpafl.org/Property-Info/Tangible-Personal-Property
+    https://hcpafl.org//hcpafl.org/Downloads/Forms
+    https://hcpafl.org//hcpafl.org/Downloads/Maps-Data
+
+  PAGE: https://hcpafl.org/downloads
+    https://hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption
+    https://hcpafl.org/Downloads/Forms
+    https://hcpafl.org/Downloads/Maps-Data
+    https://hcpafl.org/LinkClick.aspx?link=%2fDownloads%2fMaps-Data&tabid=97&portalid=1&mid=575
+    https://hcpafl.org/Downloads/Maps-Data
+    https://hcpafl.org/Downloads/Forms#EXEMPTIONS
+    http://www.hillsclerk.com/Additional-Services/Property-Fraud-Alert?textHighlight=Property%20Fraud%20Alert%20Service&exp=true
+
+  PAGE: https://www.hcpafl.org/downloads
+    https://www.hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption
+    https://www.hcpafl.org/Downloads/Forms
+    https://www.hcpafl.org/Downloads/Maps-Data
+    https://hcpafl.org/LinkClick.aspx?link=%2fDownloads%2fMaps-Data&tabid=97&portalid=1&mid=575
+    https://hcpafl.org/Downloads/Maps-Data
+    https://hcpafl.org/Downloads/Forms#EXEMPTIONS
+    http://www.hillsclerk.com/Additional-Services/Property-Fraud-Alert?textHighlight=Property%20Fraud%20Alert%20Service&exp=true
