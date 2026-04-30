@@ -1,0 +1,721 @@
+============================================================
+ALL CLERK DROPDOWN OPTIONS
+============================================================
+  value=''
+  value='(AFF) AFFIDAVIT'
+  value='(AGR) AGREEMENT'
+  value='(AGD) AGREEMENT AND/OR CONTRACT FOR DEED'
+  value='(ASG) ASSIGNMENT'
+  value='(ASINT) ASSIGNMENT OF INTEREST'
+  value='(ASGT) ASSIGNMENT/TAXES'
+  value='(BND) BOND'
+  value='(CTF) CERTIFICATE'
+  value='(CCJ) CERTIFIED COPY OF A COURT JUDGMENT'
+  value='(CND) DECLARATION OF CONDOMINIUM'
+  value='(CONDO) CONDOMINIUM PLAN'
+  value='(LNCORPTX) CORP TAX LIEN FOR STATE OF FLORIDA'
+  value='(COHOME) COURT ORDER DETER HMSTD'
+  value='(CP) COURT PAPER'
+  value='(DC) DEATH CERTIFICATE'
+  value='(D) DEED'
+  value='(DPL) DEED PLAT'
+  value='(DRCP) DOMESTIC RELATIONS COURT PAPER'
+  value='(DRJUD) DOMESTIC RELATIONS JUDGMENT'
+  value='(EAS) EASEMENT'
+  value='(FIN) FINANCING STATEMENT'
+  value='(GOV) GOVERNMENT RELATED'
+  value='(JUD) JUDGMENT'
+  value='(LN) LIEN'
+  value='(LP) LIS PENDENS'
+  value='(MROW) MAINTAINED RIGHT OF WAY'
+  value='(MAR) MARRIAGE RECORD'
+  value='(MEDLN) MEDICAID LIEN'
+  value='(MIL) MILITARY DISCHARGE/SEPARATION'
+  value='(MSUBDSURV) MINOR SUBDIVISION SURVEY'
+  value='(MOD) MODIFICATION'
+  value='(MTG) MORTGAGE'
+  value='(MTGNDOC) MORTGAGE NO DOC STAMPS'
+  value='(MTGNT) MORTGAGE EXEMPT TAXES'
+  value='(MTGNIT) MORTGAGE NO INTANGIBLE TAXES'
+  value='(MTGREV) MORTGAGE REVERSE'
+  value='(NOT) NOTICE'
+  value='(NOC) NOTICE OF COMMENCEMENT'
+  value='(NOCCONS) NOTICE OF COMMENCEMENT CONSUMER'
+  value='(NCL) NOTICE OF CONTEST OF LIEN'
+  value='(ODNPFL) ORDER DENYING PETITION FAMILY'
+  value='(ODRNS) ORDER OF DISMISSAL RESPONDENT NOT SERVED'
+  value='(ORD) ORDER'
+  value='(PR) PARTIAL RELEASE'
+  value='(PL) PLAT'
+  value='(PUR) PLAT RELATED'
+  value='(PRO) PROBATE DOCUMENTS'
+  value='(POA) POWER OF ATTORNEY'
+  value='(PRREL) PERSONAL REP RELEASE'
+  value='(REL) RELEASE'
+  value='(RELLP) RELEASE LIS PENDENS'
+  value='(REQAFF) REQUEST AFFIDAVIT'
+  value='(RES) RESTRICTIONS'
+  value='(ROWM) RIGHT OF WAY MONUMENT'
+  value='(ROWR) RIGHT OF WAY RESERVATION'
+  value='(ROWT) RIGHT OF WAY TRANSFER'
+  value='(SAT) SATISFACTION'
+  value='(SATCORPTX) SATISFACTION CORP TAX FOR STATE OF FL'
+  value='(SLM) SURVEY & LOCATION MAP'
+  value='(TCDP) TAMPA CITY DOMESTIC PARTNERSHIP'
+  value='(TAXDEED) TAX DEED'
+  value='(TER) TERMINATION'
+  value='(TRA) TRANSFER'
+
+============================================================
+HCPA MAPS-DATA — DEEP LINK SCAN
+============================================================
+
+All links on Maps-Data page (99 total):
+  [Login]  https://hcpafl.org/Login?returnurl=%2fDownloads%2fMaps-Data
+  []  https://hcpafl.org/
+  [Home]  https://hcpafl.org/
+  [Welcome Letter]  https://hcpafl.org/Home/Welcome-Letter
+  [Using the HCPA Website]  https://hcpafl.org/LinkClick.aspx?fileticket=-S63S8TivLs%3d&tabid=321&portalid=1
+  [Using the HCPA Mobile Site]  https://hcpafl.org/Home/Using-the-HCPA-Website/Using-the-HCPA-Mobile-Site
+  [How To Search for Subsidences]  https://hcpafl.org/Home/How-To-Search-for-Subsidences
+  [HCPA Employment Opportunities]  https://workforcenow.adp.com/mascsr/default/mdf/recruitment/recruitment.html?cid=065d370a-d7fa-4091-9579-0a0c71588846&ccId=19000101_000001&lang=en_US
+  [TPP Address Change]  https://www.hcpafl.org/Portals/HCPAFL/pdfs/ChangeOfAddressTPP032015.pdf?ver=2019-02-04-092318-553
+  [FEMA 50% Rule]  https://hcpafl.org/Home/FEMA-50-Rule
+  [Value Review Application Form]  https://hcpafl.org/Home/Value-Review-Application-Form
+  [Formulario de solicitud de revisión del valor de la propieda]  https://hcpafl.org/Home/-Formulario-de-solicitud-de-revisi%C3%B3n-del-valor-de-la-propiedad
+  [Website and Online Application Accessibility Statement]  https://hcpafl.org/Home/Website-and-Online-Application-Accessibility-Statement
+  [Our Office]  https://hcpafl.orgjavascript:void(0)
+  [Our Locations]  https://hcpafl.org/Contact-Us/Our-Locations
+  [Meet Your Appraiser]  https://hcpafl.org/Our-Office/Meet-Your-Appraiser
+  [Coach Bob's Video Messages]  https://hcpafl.org/Our-Office/Coach-Bobs-Video-Messages
+  [Duties of the HCPA]  https://hcpafl.org/Our-Office/Duties-of-the-HCPA
+  [Important Dates]  https://hcpafl.org/Our-Office/Important-Dates
+  [Budget / Tax Roll Stats]  https://hcpafl.org/Our-Office/Budget-Tax-Roll-Stats
+  [ADA Compliance Statement]  https://www.hcpafl.org/Portals/HCPAFL/ADA%20Compliance%20Statement.pdf?ver=2021-08-27-103807-857
+  [Property Info]  https://hcpafl.orgjavascript:void(0)
+  [Homestead & Other Exemptions]  https://hcpafl.org/Property-Info/Homestead-Other-Info
+  [Save Our Homes]  https://hcpafl.org/Property-Info/Save-Our-Homes
+  [Coach Bob's Property Tax Playbook]  https://hcpafl.org/Property-Info/Coach-Bobs-Property-Tax-Playbook
+  [Property Damage Reporting Hub]  https://dmz.hcpafl.org/storm/accordian.cfm
+  [The Appeal Process]  https://hcpafl.org/Property-Info/The-Appeal-Process
+  [The Appraisal Process & Your Taxes]  https://hcpafl.org/Property-Info/The-Appraisal-Process-Your-Taxes
+  [Greenbelt / Agriculture]  https://hcpafl.org/Property-Info/Greenbelt-Agriculture
+  [Tangible Personal Property]  https://hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption
+  [Truth In Millage]  https://hcpafl.org/Property-Info/Truth-In-Millage
+  [Taxing Authorities]  https://hcpafl.org/Property-Info/Taxing-Authorities
+  [Tax Estimator]  http://gis.hcpafl.org/propertysearch/taxestimator.aspx
+  [Adverse Possession]  https://hcpafl.org/Home/Adverse-Possession-Claims-Warning-Letter
+  [Records Custodian]  https://www.hcpafl.org/Portals/HCPAFL/RecordsCustodianforHCPA_Marilyn.pdf?ver=2023-04-29-105106-420
+  [Advise of Property Owner’s Death]  https://hcpafl.org/Property-Info/Advise-of-Property-Owners-Death
+  [Downloads]  https://hcpafl.orgjavascript:void(0)
+  [Forms]  https://hcpafl.org/Downloads/Forms
+  [Maps & Data]  https://hcpafl.org/Downloads/Maps-Data
+  [E-Filing]  https://hcpafl.orgjavascript:void(0)
+  [Homestead E-file]  https://hcpafl.org/E-Filing/Homestead-E-file
+  [Residential-Sales-Verification-Letter]  https://www.hcpafl.org/Home/Residential-Sales-Verification-Letter
+  [Income and Expense Survey]  https://dmz.hcpafl.org/ine/platformSensor.cfm
+  [Application for Greenbelt Classification of Lands]  https://dmz.hcpafl.org/ag/index.cfm
+  [TPP Tax Extension Request]  https://dmz.hcpafl.org/TPP_ext_req/index_closed.cfm
+  [Tangible Tax Return]  https://taxpayer.justappraised.com/dashboard/form/FL_FORM_DR_405?county=hillsboroughflpa
+  [Hurricane Damage Assessment Form]  https://hcpafl.org/E-Filing/Hurricane-Damage-Assessment-Form
+  [Search]  https://hcpafl.orgjavascript:void(0)
+  [Search Real Estate]  https://hcpafl.orgjavascript:void(0)
+  [Basic Search]  http://gis.hcpafl.org/propertysearch#/nav/Basic Search
+  [Advanced Search]  http://gis.hcpafl.org/propertysearch/#/nav/Advanced Search
+  [Sales Search]  http://gis.hcpafl.org/propertysearch/?usefullsite=true#/nav/Sales%20Search
+  [Search GIS / Maps]  http://gis.hcpafl.org/gissearch/
+  [Search TPP]  http://gis.hcpafl.org/tppsearch/
+  [Search Subsidence]  http://gis.hcpafl.org/SubsidenceSearch/#/nav/Search
+  [Search Mobile]  http://gis.hcpafl.org/MobileSearch/
+  [Search Help]  https://hcpafl.org/Search/Search-Help
+  [Links]  https://hcpafl.orgjavascript:void(0)
+  [Other Agencies]  https://hcpafl.org/Links/Other-Agencies
+  [Other County Appraisers]  https://floridarevenue.com/property/Pages/LocalOfficials.aspx
+  [Contact Us]  https://hcpafl.orgjavascript:void(0)
+  [Email Us / Feedback]  https://hcpafl.org/Contact-Us/Email-Us-Feedback
+  [HCPA Directors]  https://hcpafl.org/Links/HCPA-Directors
+  [Our Locations]  https://hcpafl.org/Contact-Us/Our-Locations
+  [Invite Coach Bob as Speaker]  https://hcpafl.org/Contact-Us/Invite-Coach-Bob-as-Speaker
+  [Records Custodian]  https://www.hcpafl.org/Portals/HCPAFL/RecordsCustodianforHCPA_Marilyn.pdf?ver=2023-04-29-105106-420
+  [Citizen Liaison]  https://dmz.hcpafl.org/liaison/
+  [Search]  https://hcpafl.orgjavascript:__doPostBack('dnn$dnnSearch$cmdSearch','')
+  [email]  https://hcpafl.org/Contact-Us/Email-Us-Feedback
+  [downtown]  https://hcpafl.org/Contact-Us/Our-Locations#DOWNTOWN
+  [Brandon locations]  https://hcpafl.org/Contact-Us/Our-Locations#BRANDON
+  [View or print]  https://hcpafl.org/Portals/HCPAFL/pdfs/str_map.pdf
+  [[+] Show more details...]  https://hcpafl.orgjavascript:;
+  [View a Sample Map]  https://hcpafl.org/Portals/HCPAFL/maps/draft_map_1sect.jpg
+  [[+] Show more details...]  https://hcpafl.orgjavascript:;
+  [View a Sample Map]  https://hcpafl.org/Portals/HCPAFL/maps/draft_map_4sect.jpg
+  [[+] Show more details...]  https://hcpafl.orgjavascript:;
+  [View a Sample Map]  https://hcpafl.org/Portals/HCPAFL/maps/drafta_1sect.jpg
+  [[+] Show more details...]  https://hcpafl.orgjavascript:;
+  [View a Sample Map]  https://hcpafl.org/Portals/HCPAFL/maps/drafta_4sect.jpg
+  [[+] Show more details...]  https://hcpafl.orgjavascript:;
+  [View a Sample Map]  https://hcpafl.org/Portals/HCPAFL/maps/parcel_a.jpg
+  [[+] Show more details...]  https://hcpafl.orgjavascript:;
+  [View a Sample Map]  https://hcpafl.org/Portals/HCPAFL/maps/draft_parcel.jpg
+  [[+] Show more details...]  https://hcpafl.orgjavascript:;
+  [View a Sample Map]  https://hcpafl.org/Portals/HCPAFL/maps/parcel_var.jpg
+  [View a Sample Map]  https://hcpafl.org/Portals/HCPAFL/maps/quarter_sect.jpg
+  [[+] Show more details...]  https://hcpafl.orgjavascript:;
+  [View a Sample Map]  https://hcpafl.org/Portals/HCPAFL/maps/dor_sect.jpg
+  [[+] Show more details...]  https://hcpafl.orgjavascript:;
+  [gisdept@hcpafl.org]  https://hcpafl.orgmailto:gisdept@hcpafl.org?subject=Aerial%20Imagery%20Request&body=Please%20include%20your%20name%2C%20phone%20number%20and%20area%20requested.
+  [View All Our Locations]  https://hcpafl.org/Contact-Us/Our-Locations
+  [(813) 272-6100]  https://hcpafl.orgtel:(813) 272-6100
+  [E-Mail Us!]  https://hcpafl.org/Contact-Us/Email-Us-Feedback
+  [HCPA Employment Opportunities]  https://workforcenow.adp.com/mascsr/default/mdf/recruitment/recruitment.html?cid=065d370a-d7fa-4091-9579-0a0c71588846&ccId=19000101_000001&lang=en_US
+  [ADA Compliance Statement]  https://hcpafl.org/Home/Website-and-Online-Application-Accessibility-Statement
+  [Click here to view the Property Owner Bill of Rights]  https://hcpafl.org/POBOR
+  []  https://hcpafl.org/Our-Office/Important-Dates
+  [Disclaimer]  https://hcpafl.org/Disclaimer
+
+── Following each link for file downloads ──
+  FOUND on https://hcpafl.org/Login?returnurl=%2fDownloads%2fMaps-Data:
+    [Using the HCPA Website]  https://hcpafl.org/LinkClick.aspx?fileticket=-S63S8TivLs%3d&tabid=321&portalid=1
+    → status=200 size=113747 type=application/pdf
+  FOUND on https://hcpafl.org/Login?returnurl=%2fDownloads%2fMaps-Data:
+    [Tangible Personal Property]  https://hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption
+    → status=200 size=55737 type=text/html; charset=utf-8
+  FOUND on https://hcpafl.org/Login?returnurl=%2fDownloads%2fMaps-Data:
+    [Downloads]  https://hcpafl.orgjavascript:void(0)
+    → HEAD error: Failed to parse: https://hcpafl.orgjavascript:void(0)
+  FOUND on https://hcpafl.org/:
+    [Using the HCPA Website]  https://hcpafl.org/LinkClick.aspx?fileticket=-S63S8TivLs%3d&tabid=321&portalid=1
+    → status=200 size=113747 type=application/pdf
+  FOUND on https://hcpafl.org/:
+    [Tangible Personal Property]  https://hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption
+    → status=200 size=55737 type=text/html; charset=utf-8
+  FOUND on https://hcpafl.org/:
+    [Downloads]  https://hcpafl.orgjavascript:void(0)
+    → HEAD error: Failed to parse: https://hcpafl.orgjavascript:void(0)
+  FOUND on https://hcpafl.org/:
+    [Property Search]  https://hcpafl.org/LinkClick.aspx?link=%2fSearch%2fSearch-Real-Estate%2fBasic-Search&tabid=97&portalid=1&mid=575
+    → status=200 size=88448 type=text/html; charset=utf-8
+  FOUND on https://hcpafl.org/:
+    [Map Search]  https://hcpafl.org/LinkClick.aspx?link=%2fSearch%2fSearch-GIS-Maps&tabid=97&portalid=1&mid=575
+    → status=200 size=23829 type=text/html; charset=utf-8
+  FOUND on https://hcpafl.org/:
+    [EXEMPTIONS INFO]  https://hcpafl.org/LinkClick.aspx?link=%2fProperty-Info%2fHomestead-Other-Exemptions&tabid=97&portalid=1&mid=575
+    → status=200 size=62507 type=text/html; charset=utf-8
+  FOUND on https://hcpafl.org/:
+    [Download Forms]  https://hcpafl.org/LinkClick.aspx?link=146&tabid=97&portalid=1&mid=575
+    → status=200 size=44031 type=text/html; charset=utf-8
+  FOUND on https://hcpafl.org/:
+    [Maps & Data]  https://hcpafl.org/LinkClick.aspx?link=%2fDownloads%2fMaps-Data&tabid=97&portalid=1&mid=575
+    → status=200 size=45996 type=text/html; charset=utf-8
+  FOUND on https://hcpafl.org/:
+    [Download property data]  https://hcpafl.org/Downloads/Maps-Data
+    → status=200 size=45996 type=text/html; charset=utf-8
+  FOUND on https://hcpafl.org/:
+    [Read More]  http://www.hillsclerk.com/Additional-Services/Property-Fraud-Alert?textHighlight=Property%20Fraud%20Alert%20Service&exp=true
+    → status=200 size=? type=text/html;charset=UTF-8
+  FOUND on https://hcpafl.org/Home/Welcome-Letter:
+    [Using the HCPA Website]  https://hcpafl.org/LinkClick.aspx?fileticket=-S63S8TivLs%3d&tabid=321&portalid=1
+    → status=200 size=113747 type=application/pdf
+  FOUND on https://hcpafl.org/Home/Welcome-Letter:
+    [Tangible Personal Property]  https://hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption
+    → status=200 size=55737 type=text/html; charset=utf-8
+  FOUND on https://hcpafl.org/Home/Welcome-Letter:
+    [Downloads]  https://hcpafl.orgjavascript:void(0)
+    → HEAD error: Failed to parse: https://hcpafl.orgjavascript:void(0)
+  FOUND on https://hcpafl.org/Home/Using-the-HCPA-Website/Using-the-HCPA-Mobile-Site:
+    [Using the HCPA Website]  https://hcpafl.org/LinkClick.aspx?fileticket=-S63S8TivLs%3d&tabid=321&portalid=1
+    → status=200 size=113747 type=application/pdf
+  FOUND on https://hcpafl.org/Home/Using-the-HCPA-Website/Using-the-HCPA-Mobile-Site:
+    [Tangible Personal Property]  https://hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption
+    → status=200 size=55737 type=text/html; charset=utf-8
+  FOUND on https://hcpafl.org/Home/Using-the-HCPA-Website/Using-the-HCPA-Mobile-Site:
+    [Downloads]  https://hcpafl.orgjavascript:void(0)
+    → HEAD error: Failed to parse: https://hcpafl.orgjavascript:void(0)
+  FOUND on https://hcpafl.org/Home/How-To-Search-for-Subsidences:
+    [Using the HCPA Website]  https://hcpafl.org/LinkClick.aspx?fileticket=-S63S8TivLs%3d&tabid=321&portalid=1
+    → status=200 size=113747 type=application/pdf
+  FOUND on https://hcpafl.org/Home/How-To-Search-for-Subsidences:
+    [Tangible Personal Property]  https://hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption
+    → status=200 size=55737 type=text/html; charset=utf-8
+  FOUND on https://hcpafl.org/Home/How-To-Search-for-Subsidences:
+    [Downloads]  https://hcpafl.orgjavascript:void(0)
+    → HEAD error: Failed to parse: https://hcpafl.orgjavascript:void(0)
+  FOUND on https://hcpafl.org/Home/FEMA-50-Rule:
+    [Using the HCPA Website]  https://hcpafl.org/LinkClick.aspx?fileticket=-S63S8TivLs%3d&tabid=321&portalid=1
+    → status=200 size=113747 type=application/pdf
+  FOUND on https://hcpafl.org/Home/FEMA-50-Rule:
+    [Tangible Personal Property]  https://hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption
+    → status=200 size=55737 type=text/html; charset=utf-8
+  FOUND on https://hcpafl.org/Home/FEMA-50-Rule:
+    [Downloads]  https://hcpafl.orgjavascript:void(0)
+    → HEAD error: Failed to parse: https://hcpafl.orgjavascript:void(0)
+  FOUND on https://hcpafl.org/Home/Value-Review-Application-Form:
+    [Using the HCPA Website]  https://hcpafl.org/LinkClick.aspx?fileticket=-S63S8TivLs%3d&tabid=321&portalid=1
+    → status=200 size=113747 type=application/pdf
+  FOUND on https://hcpafl.org/Home/Value-Review-Application-Form:
+    [Tangible Personal Property]  https://hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption
+    → status=200 size=55737 type=text/html; charset=utf-8
+  FOUND on https://hcpafl.org/Home/Value-Review-Application-Form:
+    [Downloads]  https://hcpafl.orgjavascript:void(0)
+    → HEAD error: Failed to parse: https://hcpafl.orgjavascript:void(0)
+  FOUND on https://hcpafl.org/Home/-Formulario-de-solicitud-de-revisi%C3%B3n-del-valor-de-la-propiedad:
+    [Using the HCPA Website]  https://hcpafl.org/LinkClick.aspx?fileticket=-S63S8TivLs%3d&tabid=321&portalid=1
+    → status=200 size=113747 type=application/pdf
+  FOUND on https://hcpafl.org/Home/-Formulario-de-solicitud-de-revisi%C3%B3n-del-valor-de-la-propiedad:
+    [Tangible Personal Property]  https://hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption
+    → status=200 size=55737 type=text/html; charset=utf-8
+  FOUND on https://hcpafl.org/Home/-Formulario-de-solicitud-de-revisi%C3%B3n-del-valor-de-la-propiedad:
+    [Downloads]  https://hcpafl.orgjavascript:void(0)
+    → HEAD error: Failed to parse: https://hcpafl.orgjavascript:void(0)
+  FOUND on https://hcpafl.org/Home/Website-and-Online-Application-Accessibility-Statement:
+    [Using the HCPA Website]  https://hcpafl.org/LinkClick.aspx?fileticket=-S63S8TivLs%3d&tabid=321&portalid=1
+    → status=200 size=113747 type=application/pdf
+  FOUND on https://hcpafl.org/Home/Website-and-Online-Application-Accessibility-Statement:
+    [Tangible Personal Property]  https://hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption
+    → status=200 size=55737 type=text/html; charset=utf-8
+  FOUND on https://hcpafl.org/Home/Website-and-Online-Application-Accessibility-Statement:
+    [Downloads]  https://hcpafl.orgjavascript:void(0)
+    → HEAD error: Failed to parse: https://hcpafl.orgjavascript:void(0)
+  Error fetching https://hcpafl.orgjavascript:void(0): Failed to parse: https://hcpafl.orgjavascript:void(0)
+  FOUND on https://hcpafl.org/Contact-Us/Our-Locations:
+    [Using the HCPA Website]  https://hcpafl.org/LinkClick.aspx?fileticket=-S63S8TivLs%3d&tabid=321&portalid=1
+    → status=200 size=113747 type=application/pdf
+  FOUND on https://hcpafl.org/Contact-Us/Our-Locations:
+    [Tangible Personal Property]  https://hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption
+    → status=200 size=55737 type=text/html; charset=utf-8
+  FOUND on https://hcpafl.org/Contact-Us/Our-Locations:
+    [Downloads]  https://hcpafl.orgjavascript:void(0)
+    → HEAD error: Failed to parse: https://hcpafl.orgjavascript:void(0)
+  FOUND on https://hcpafl.org/Our-Office/Meet-Your-Appraiser:
+    [Using the HCPA Website]  https://hcpafl.org/LinkClick.aspx?fileticket=-S63S8TivLs%3d&tabid=321&portalid=1
+    → status=200 size=113747 type=application/pdf
+  FOUND on https://hcpafl.org/Our-Office/Meet-Your-Appraiser:
+    [Tangible Personal Property]  https://hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption
+    → status=200 size=55737 type=text/html; charset=utf-8
+  FOUND on https://hcpafl.org/Our-Office/Meet-Your-Appraiser:
+    [Downloads]  https://hcpafl.orgjavascript:void(0)
+    → HEAD error: Failed to parse: https://hcpafl.orgjavascript:void(0)
+  FOUND on https://hcpafl.org/Our-Office/Coach-Bobs-Video-Messages:
+    [Using the HCPA Website]  https://hcpafl.org/LinkClick.aspx?fileticket=-S63S8TivLs%3d&tabid=321&portalid=1
+    → status=200 size=113747 type=application/pdf
+  FOUND on https://hcpafl.org/Our-Office/Coach-Bobs-Video-Messages:
+    [Tangible Personal Property]  https://hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption
+    → status=200 size=55737 type=text/html; charset=utf-8
+  FOUND on https://hcpafl.org/Our-Office/Coach-Bobs-Video-Messages:
+    [Downloads]  https://hcpafl.orgjavascript:void(0)
+    → HEAD error: Failed to parse: https://hcpafl.orgjavascript:void(0)
+  FOUND on https://hcpafl.org/Our-Office/Duties-of-the-HCPA:
+    [Using the HCPA Website]  https://hcpafl.org/LinkClick.aspx?fileticket=-S63S8TivLs%3d&tabid=321&portalid=1
+    → status=200 size=113747 type=application/pdf
+  FOUND on https://hcpafl.org/Our-Office/Duties-of-the-HCPA:
+    [Tangible Personal Property]  https://hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption
+    → status=200 size=55737 type=text/html; charset=utf-8
+  FOUND on https://hcpafl.org/Our-Office/Duties-of-the-HCPA:
+    [Downloads]  https://hcpafl.orgjavascript:void(0)
+    → HEAD error: Failed to parse: https://hcpafl.orgjavascript:void(0)
+  FOUND on https://hcpafl.org/Our-Office/Important-Dates:
+    [Using the HCPA Website]  https://hcpafl.org/LinkClick.aspx?fileticket=-S63S8TivLs%3d&tabid=321&portalid=1
+    → status=200 size=113747 type=application/pdf
+  FOUND on https://hcpafl.org/Our-Office/Important-Dates:
+    [Tangible Personal Property]  https://hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption
+    → status=200 size=55737 type=text/html; charset=utf-8
+  FOUND on https://hcpafl.org/Our-Office/Important-Dates:
+    [Downloads]  https://hcpafl.orgjavascript:void(0)
+    → HEAD error: Failed to parse: https://hcpafl.orgjavascript:void(0)
+  FOUND on https://hcpafl.org/Our-Office/Budget-Tax-Roll-Stats:
+    [Using the HCPA Website]  https://hcpafl.org/LinkClick.aspx?fileticket=-S63S8TivLs%3d&tabid=321&portalid=1
+    → status=200 size=113747 type=application/pdf
+  FOUND on https://hcpafl.org/Our-Office/Budget-Tax-Roll-Stats:
+    [Tangible Personal Property]  https://hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption
+    → status=200 size=55737 type=text/html; charset=utf-8
+  FOUND on https://hcpafl.org/Our-Office/Budget-Tax-Roll-Stats:
+    [Downloads]  https://hcpafl.orgjavascript:void(0)
+    → HEAD error: Failed to parse: https://hcpafl.orgjavascript:void(0)
+  FOUND on https://hcpafl.org/Our-Office/Budget-Tax-Roll-Stats:
+    [Download the Property Appraiser's Approved Budget]  https://hcpafl.org/Portals/HCPAFL/pdfs/FYE25-26Budget.pdf?ver=2025-09-15-113024-667
+    → status=200 size=69864 type=application/pdf
+  FOUND on https://hcpafl.org/Our-Office/Budget-Tax-Roll-Stats:
+    [Download the Tax Roll Certificate.]  https://hcpafl.org/Portals/HCPAFL/pdfs/2025_408.pdf?ver=2025-10-07-154115-257
+    → status=200 size=171840 type=application/pdf
+  FOUND on https://hcpafl.org/Our-Office/Budget-Tax-Roll-Stats:
+    [Download Table 1: Comparison of Taxes Levied – County and Municipal Governments]  https://hcpafl.org/Portals/HCPAFL/pdfs/Hillsborough Table 2023-24 and 2024-25.pdf?ver=2025-08-14-143013-243
+    → status=200 size=25097 type=application/pdf
+  FOUND on https://hcpafl.org/Our-Office/Budget-Tax-Roll-Stats:
+    [Download Table 2: Distribution of Taxes Levied By Property Type - County and Mun]  https://hcpafl.org/Portals/HCPAFL/pdfs/Hillsborough Table 2.pdf?ver=2025-08-14-145344-270
+    → status=200 size=13171 type=application/pdf
+  FOUND on https://hcpafl.org/Our-Office/Budget-Tax-Roll-Stats:
+    [Download Property Tax Sources & Calculation Methodologies]  https://hcpafl.org/Portals/HCPAFL/pdfs/method.pdf
+    → status=200 size=23454 type=application/pdf
+  FOUND on https://hcpafl.org/Property-Info/Homestead-Other-Info:
+    [Using the HCPA Website]  https://hcpafl.org/LinkClick.aspx?fileticket=-S63S8TivLs%3d&tabid=321&portalid=1
+    → status=200 size=113747 type=application/pdf
+  FOUND on https://hcpafl.org/Property-Info/Homestead-Other-Info:
+    [Tangible Personal Property]  https://hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption
+    → status=200 size=55737 type=text/html; charset=utf-8
+  FOUND on https://hcpafl.org/Property-Info/Homestead-Other-Info:
+    [Downloads]  https://hcpafl.orgjavascript:void(0)
+    → HEAD error: Failed to parse: https://hcpafl.orgjavascript:void(0)
+  FOUND on https://hcpafl.org/Property-Info/Homestead-Other-Info:
+    [Click Here to view the current year's income limitations]  https://floridarevenue.com/property/Documents/AdditionalHomesteadExemptions.pdf
+    → status=200 size=137376 type=application/pdf
+  FOUND on https://hcpafl.org/Property-Info/Homestead-Other-Info:
+    [Original Application For Assessment Reduction For Living Quarters Of Parents Or ]  https://hcpafl.org/Portals/HCPAFL/pdfs/dr501pgp.pdf
+    → status=200 size=53313 type=application/pdf
+  FOUND on https://hcpafl.org/Property-Info/Save-Our-Homes:
+    [Using the HCPA Website]  https://hcpafl.org/LinkClick.aspx?fileticket=-S63S8TivLs%3d&tabid=321&portalid=1
+    → status=200 size=113747 type=application/pdf
+  FOUND on https://hcpafl.org/Property-Info/Save-Our-Homes:
+    [Tangible Personal Property]  https://hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption
+    → status=200 size=55737 type=text/html; charset=utf-8
+  FOUND on https://hcpafl.org/Property-Info/Save-Our-Homes:
+    [Downloads]  https://hcpafl.orgjavascript:void(0)
+    → HEAD error: Failed to parse: https://hcpafl.orgjavascript:void(0)
+  FOUND on https://hcpafl.org/Property-Info/Coach-Bobs-Property-Tax-Playbook:
+    [Using the HCPA Website]  https://hcpafl.org/LinkClick.aspx?fileticket=-S63S8TivLs%3d&tabid=321&portalid=1
+    → status=200 size=113747 type=application/pdf
+  FOUND on https://hcpafl.org/Property-Info/Coach-Bobs-Property-Tax-Playbook:
+    [Tangible Personal Property]  https://hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption
+    → status=200 size=55737 type=text/html; charset=utf-8
+  FOUND on https://hcpafl.org/Property-Info/Coach-Bobs-Property-Tax-Playbook:
+    [Downloads]  https://hcpafl.orgjavascript:void(0)
+    → HEAD error: Failed to parse: https://hcpafl.orgjavascript:void(0)
+  FOUND on https://dmz.hcpafl.org/storm/accordian.cfm:
+    [Using the HCPA Website]  https://www.hcpafl.org/LinkClick.aspx?fileticket=-S63S8TivLs%3d&tabid=321&portalid=1
+    → status=200 size=113747 type=application/pdf
+  FOUND on https://dmz.hcpafl.org/storm/accordian.cfm:
+    [Tangible Personal Property]  https://www.hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption
+    → status=200 size=55889 type=text/html; charset=utf-8
+  FOUND on https://dmz.hcpafl.org/storm/accordian.cfm:
+    [Downloads]  https://hcpafl.orgjavascript:void(0)
+    → HEAD error: Failed to parse: https://hcpafl.orgjavascript:void(0)
+  FOUND on https://dmz.hcpafl.org/storm/accordian.cfm:
+    [Florida Homeowner’s Guide: Property Tax Relief for Catastrophic Events]  https://www.google.com/url?client=internal-element-cse&cx=013875534727697754568:loeu4vdvpc4&q=https://floridarevenue.com/property/Documents/homeowner_guide_property_damage_update_1.pdf&sa=U&ved=2ahUKEwi83qqD2veRAxUfQjABHQGIHp4QFnoECAEQAg&usg=AOvVaw2YRVYHBx5MzsUcQrEu4Cn7
+    → status=200 size=? type=text/html; charset=UTF-8
+  FOUND on https://dmz.hcpafl.org/storm/accordian.cfm:
+    [the Florida Homeowners Guide: Catastrophic Event Property Damage.]  https://www.google.com/url?client=internal-element-cse&cx=013875534727697754568:loeu4vdvpc4&q=https://floridarevenue.com/property/Documents/homeowner_guide_property_damage_update_1.pdf&sa=U&ved=2ahUKEwj3iYaK5OWSAxUNSzABHXJ5GZkQFnoECAMQAg&usg=AOvVaw1nZp_9IgiefHpCnBcCoNdi&fexp=121538234,121538235,73152292,73152290
+    → status=200 size=? type=text/html; charset=UTF-8
+  FOUND on https://hcpafl.org/Property-Info/The-Appeal-Process:
+    [Using the HCPA Website]  https://hcpafl.org/LinkClick.aspx?fileticket=-S63S8TivLs%3d&tabid=321&portalid=1
+    → status=200 size=113747 type=application/pdf
+  FOUND on https://hcpafl.org/Property-Info/The-Appeal-Process:
+    [Tangible Personal Property]  https://hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption
+    → status=200 size=55737 type=text/html; charset=utf-8
+  FOUND on https://hcpafl.org/Property-Info/The-Appeal-Process:
+    [Downloads]  https://hcpafl.orgjavascript:void(0)
+    → HEAD error: Failed to parse: https://hcpafl.orgjavascript:void(0)
+  FOUND on https://hcpafl.org/Property-Info/The-Appraisal-Process-Your-Taxes:
+    [Using the HCPA Website]  https://hcpafl.org/LinkClick.aspx?fileticket=-S63S8TivLs%3d&tabid=321&portalid=1
+    → status=200 size=113747 type=application/pdf
+  FOUND on https://hcpafl.org/Property-Info/The-Appraisal-Process-Your-Taxes:
+    [Tangible Personal Property]  https://hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption
+    → status=200 size=55737 type=text/html; charset=utf-8
+  FOUND on https://hcpafl.org/Property-Info/The-Appraisal-Process-Your-Taxes:
+    [Downloads]  https://hcpafl.orgjavascript:void(0)
+    → HEAD error: Failed to parse: https://hcpafl.orgjavascript:void(0)
+  FOUND on https://hcpafl.org/Property-Info/Greenbelt-Agriculture:
+    [Using the HCPA Website]  https://hcpafl.org/LinkClick.aspx?fileticket=-S63S8TivLs%3d&tabid=321&portalid=1
+    → status=200 size=113747 type=application/pdf
+  FOUND on https://hcpafl.org/Property-Info/Greenbelt-Agriculture:
+    [Tangible Personal Property]  https://hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption
+    → status=200 size=55737 type=text/html; charset=utf-8
+  FOUND on https://hcpafl.org/Property-Info/Greenbelt-Agriculture:
+    [Downloads]  https://hcpafl.orgjavascript:void(0)
+    → HEAD error: Failed to parse: https://hcpafl.orgjavascript:void(0)
+  FOUND on https://hcpafl.org/Property-Info/Greenbelt-Agriculture:
+    [Click here to download the Agricultural Guidelines in English]  https://hcpafl.org/Portals/HCPAFL/pdfs/GB GUIDELINES PRESENTATION REVISED_06102024.pdf?ver=2024-06-10-082831-940
+    → status=200 size=1422886 type=application/pdf
+  FOUND on https://hcpafl.org/Property-Info/Greenbelt-Agriculture:
+    [Click here to download the Agricultural Guidelines in Spanish]  https://hcpafl.org/Portals/HCPAFL/pdfs/GB SPANISH GUIDELINES PRESENTATION REVISED - 06122024(4).pdf?ver=2025-08-20-103102-077
+    → status=200 size=1487074 type=application/pdf
+  FOUND on https://hcpafl.org/Property-Info/Greenbelt-Agriculture:
+    [Click here to download an application (DR-482) for Agricultural Classication of ]  https://hcpafl.org/Portals/HCPAFL/dr482_2023.pdf?ver=2023-01-06-141524-793
+    → status=200 size=806627 type=application/pdf
+  FOUND on https://hcpafl.org/Property-Info/Greenbelt-Agriculture:
+    [Click here to download an application (DR-482) for Agricultural Classification o]  https://hcpafl.org/Portals/HCPAFL/pdfs/dr482_S.pdf
+    → status=200 size=1179304 type=application/pdf
+  FOUND on https://hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption:
+    [Login]  https://hcpafl.org/Login?returnurl=%2fProperty-Info%2fTangible-Personal-Property-Property-Exemption
+    → status=200 size=34414 type=text/html; charset=utf-8
+  FOUND on https://hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption:
+    [Using the HCPA Website]  https://hcpafl.org/LinkClick.aspx?fileticket=-S63S8TivLs%3d&tabid=321&portalid=1
+    → status=200 size=113747 type=application/pdf
+  FOUND on https://hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption:
+    [Tangible Personal Property]  https://hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption
+    → status=200 size=55737 type=text/html; charset=utf-8
+  FOUND on https://hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption:
+    [Downloads]  https://hcpafl.orgjavascript:void(0)
+    → HEAD error: Failed to parse: https://hcpafl.orgjavascript:void(0)
+  FOUND on https://hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption:
+    [Click Here to Download the Annual TPP Percent Good Tables]  https://hcpafl.org/Portals/HCPAFL/pdfs/PublicDepTables2025.xlsx?ver=2025-04-23-144829-920
+    → status=200 size=41029 type=application/vnd.openxmlformats-officedocument.spre
+  FOUND on https://hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption:
+    [Click Here to Download the Tangible Personal Property Excel Template]  https://hcpafl.org/Portals/HCPAFL/pdfs/MasterImportTemplate.xls
+    → status=200 size=4839424 type=application/vnd.ms-excel
+  FOUND on https://hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption:
+    [Click Here to Download the Hillsborough County Zip Codes]  https://hcpafl.org/Portals/HCPAFL/pdfs/zipcodes.xlsx
+    → status=200 size=12227 type=application/vnd.openxmlformats-officedocument.spre
+  FOUND on https://hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption:
+    [DOWNLOAD AND PRINT A TANGIBLE PERSONAL PROPERTY TAX RETURN (HC-405)]  https://hcpafl.org/Portals/HCPAFL/pdfs/HC405_2026(3).pdf?ver=2025-12-29-163648-027
+    → status=200 size=637666 type=application/pdf
+  FOUND on https://hcpafl.org/Property-Info/Truth-In-Millage:
+    [Using the HCPA Website]  https://hcpafl.org/LinkClick.aspx?fileticket=-S63S8TivLs%3d&tabid=321&portalid=1
+    → status=200 size=113747 type=application/pdf
+  FOUND on https://hcpafl.org/Property-Info/Truth-In-Millage:
+    [Tangible Personal Property]  https://hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption
+    → status=200 size=55737 type=text/html; charset=utf-8
+  FOUND on https://hcpafl.org/Property-Info/Truth-In-Millage:
+    [Downloads]  https://hcpafl.orgjavascript:void(0)
+    → HEAD error: Failed to parse: https://hcpafl.orgjavascript:void(0)
+  FOUND on https://hcpafl.org/Property-Info/Truth-In-Millage:
+    [Final 2025 Millage Rates]  https://hcpafl.org/Portals/HCPAFL/pdfs/2025FinalMillage.pdf?ver=2025-10-06-114623-490
+    → status=200 size=65913 type=application/pdf
+  FOUND on https://hcpafl.org/Property-Info/Taxing-Authorities:
+    [Using the HCPA Website]  https://hcpafl.org/LinkClick.aspx?fileticket=-S63S8TivLs%3d&tabid=321&portalid=1
+    → status=200 size=113747 type=application/pdf
+  FOUND on https://hcpafl.org/Property-Info/Taxing-Authorities:
+    [Tangible Personal Property]  https://hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption
+    → status=200 size=55737 type=text/html; charset=utf-8
+  FOUND on https://hcpafl.org/Property-Info/Taxing-Authorities:
+    [Downloads]  https://hcpafl.orgjavascript:void(0)
+    → HEAD error: Failed to parse: https://hcpafl.orgjavascript:void(0)
+  FOUND on http://gis.hcpafl.org/propertysearch/taxestimator.aspx:
+    [Tangible Personal Property]  https://hcpafl.org//hcpafl.org/Property-Info/Tangible-Personal-Property
+    → status=200 size=49436 type=text/html; charset=utf-8
+  FOUND on https://hcpafl.org/Home/Adverse-Possession-Claims-Warning-Letter:
+    [Using the HCPA Website]  https://hcpafl.org/LinkClick.aspx?fileticket=-S63S8TivLs%3d&tabid=321&portalid=1
+    → status=200 size=113747 type=application/pdf
+  FOUND on https://hcpafl.org/Home/Adverse-Possession-Claims-Warning-Letter:
+    [Tangible Personal Property]  https://hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption
+    → status=200 size=55737 type=text/html; charset=utf-8
+  FOUND on https://hcpafl.org/Home/Adverse-Possession-Claims-Warning-Letter:
+    [Downloads]  https://hcpafl.orgjavascript:void(0)
+    → HEAD error: Failed to parse: https://hcpafl.orgjavascript:void(0)
+  FOUND on https://hcpafl.org/Property-Info/Advise-of-Property-Owners-Death:
+    [Using the HCPA Website]  https://hcpafl.org/LinkClick.aspx?fileticket=-S63S8TivLs%3d&tabid=321&portalid=1
+    → status=200 size=113747 type=application/pdf
+  FOUND on https://hcpafl.org/Property-Info/Advise-of-Property-Owners-Death:
+    [Tangible Personal Property]  https://hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption
+    → status=200 size=55737 type=text/html; charset=utf-8
+  FOUND on https://hcpafl.org/Property-Info/Advise-of-Property-Owners-Death:
+    [Downloads]  https://hcpafl.orgjavascript:void(0)
+    → HEAD error: Failed to parse: https://hcpafl.orgjavascript:void(0)
+  FOUND on https://hcpafl.org/Downloads/Forms:
+    [Using the HCPA Website]  https://hcpafl.org/LinkClick.aspx?fileticket=-S63S8TivLs%3d&tabid=321&portalid=1
+    → status=200 size=113747 type=application/pdf
+  FOUND on https://hcpafl.org/Downloads/Forms:
+    [Tangible Personal Property]  https://hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption
+    → status=200 size=55737 type=text/html; charset=utf-8
+  FOUND on https://hcpafl.org/Downloads/Forms:
+    [Downloads]  https://hcpafl.orgjavascript:void(0)
+    → HEAD error: Failed to parse: https://hcpafl.orgjavascript:void(0)
+  FOUND on https://hcpafl.org/Downloads/Forms:
+    [Portability Application And Instructions  (DR501-T) Must be submitted with origi]  https://hcpafl.org/Portals/HCPAFL/pdfs/dr501tn0712.pdf?ver=oSw95cQMSvk4-RVRFyaWqw%3d%3d
+    → status=200 size=162370 type=application/pdf
+  FOUND on https://hcpafl.org/Downloads/Forms:
+    [Additional Low Income Senior Citizen (DR-501SC rev. 01/22)]  https://floridarevenue.com/property/Documents/dr501sc.pdf
+    → HEAD error: ('Connection aborted.', RemoteDisconnected('Remote end closed connection without response'))
+  FOUND on https://hcpafl.org/Downloads/Forms:
+    [View The Current Year's Income Limitations]  https://floridarevenue.com/property/Documents/AdditionalHomesteadExemptions.pdf
+    → status=200 size=137376 type=application/pdf
+  FOUND on https://hcpafl.org/Downloads/Forms:
+    [Educational Property Tax Exemption Application (DR-504ED)]  https://hcpafl.org/Portals/HCPAFL/pdfs/DR-504ED.pdf?ver=2023-08-04-125232-530
+    → status=200 size=140787 type=application/pdf
+  FOUND on https://hcpafl.org/Downloads/Forms:
+    [Download a Tangible Personal Property Tax Return (PDF)]  https://hcpafl.org/Portals/HCPAFL/pdfs/HC405_2026(3).pdf?ver=2025-12-29-163648-027
+    → status=200 size=637666 type=application/pdf
+  FOUND on https://hcpafl.org/Downloads/Forms:
+    [Click Here for Other TPP Forms and Related Information]  https://hcpafl.org/Property-Info/Tangible-Personal-Property
+    → status=200 size=55737 type=text/html; charset=utf-8
+  FOUND on https://hcpafl.org/Downloads/Forms:
+    [Please Click Here to Download the Residential 2-9 Units Income & Expense Form]  https://hcpafl.org/Portals/HCPAFL/DuplexWeb_rev_2023.pdf?ver=2023-02-16-100508-293
+    → status=200 size=503035 type=application/pdf
+  FOUND on https://hcpafl.org/Downloads/Maps-Data:
+    [Using the HCPA Website]  https://hcpafl.org/LinkClick.aspx?fileticket=-S63S8TivLs%3d&tabid=321&portalid=1
+    → status=200 size=113747 type=application/pdf
+  FOUND on https://hcpafl.org/Downloads/Maps-Data:
+    [Tangible Personal Property]  https://hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption
+    → status=200 size=55737 type=text/html; charset=utf-8
+  FOUND on https://hcpafl.org/Downloads/Maps-Data:
+    [Downloads]  https://hcpafl.orgjavascript:void(0)
+    → HEAD error: Failed to parse: https://hcpafl.orgjavascript:void(0)
+  FOUND on https://hcpafl.org/Downloads/Maps-Data:
+    [View a Sample Map]  https://hcpafl.org/Portals/HCPAFL/maps/parcel_a.jpg
+    → status=200 size=197343 type=image/jpeg
+  FOUND on https://hcpafl.org/Downloads/Maps-Data:
+    [View a Sample Map]  https://hcpafl.org/Portals/HCPAFL/maps/draft_parcel.jpg
+    → status=200 size=79196 type=image/jpeg
+  FOUND on https://hcpafl.org/Downloads/Maps-Data:
+    [View a Sample Map]  https://hcpafl.org/Portals/HCPAFL/maps/parcel_var.jpg
+    → status=200 size=119572 type=image/jpeg
+  FOUND on https://hcpafl.org/E-Filing/Homestead-E-file:
+    [Using the HCPA Website]  https://hcpafl.org/LinkClick.aspx?fileticket=-S63S8TivLs%3d&tabid=321&portalid=1
+    → status=200 size=113747 type=application/pdf
+  FOUND on https://hcpafl.org/E-Filing/Homestead-E-file:
+    [Tangible Personal Property]  https://hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption
+    → status=200 size=55737 type=text/html; charset=utf-8
+  FOUND on https://hcpafl.org/E-Filing/Homestead-E-file:
+    [Downloads]  https://hcpafl.orgjavascript:void(0)
+    → HEAD error: Failed to parse: https://hcpafl.orgjavascript:void(0)
+  FOUND on https://www.hcpafl.org/Home/Residential-Sales-Verification-Letter:
+    [Using the HCPA Website]  https://hcpafl.org/LinkClick.aspx?fileticket=-S63S8TivLs%3d&tabid=321&portalid=1
+    → status=200 size=113747 type=application/pdf
+  FOUND on https://www.hcpafl.org/Home/Residential-Sales-Verification-Letter:
+    [Tangible Personal Property]  https://www.hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption
+    → status=200 size=55889 type=text/html; charset=utf-8
+  FOUND on https://www.hcpafl.org/Home/Residential-Sales-Verification-Letter:
+    [Downloads]  https://hcpafl.orgjavascript:void(0)
+    → HEAD error: Failed to parse: https://hcpafl.orgjavascript:void(0)
+  FOUND on https://dmz.hcpafl.org/ine/platformSensor.cfm:
+    [Using the HCPA Website]  https://hcpafl.org/LinkClick.aspx?fileticket=-S63S8TivLs%3d&tabid=321&portalid=1
+    → status=200 size=113747 type=application/pdf
+  FOUND on https://dmz.hcpafl.org/ine/platformSensor.cfm:
+    [Tangible Personal Property]  https://www.hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption
+    → status=200 size=55889 type=text/html; charset=utf-8
+  FOUND on https://dmz.hcpafl.org/ine/platformSensor.cfm:
+    [Downloads]  https://hcpafl.orgjavascript:void(0)
+    → HEAD error: Failed to parse: https://hcpafl.orgjavascript:void(0)
+  FOUND on https://dmz.hcpafl.org/ag/index.cfm:
+    [Using the HCPA Website]  https://www.hcpafl.org/LinkClick.aspx?fileticket=-S63S8TivLs%3d&tabid=321&portalid=1
+    → status=200 size=113747 type=application/pdf
+  FOUND on https://dmz.hcpafl.org/ag/index.cfm:
+    [Tangible Personal Property]  https://www.hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption
+    → status=200 size=55889 type=text/html; charset=utf-8
+  FOUND on https://dmz.hcpafl.org/ag/index.cfm:
+    [Downloads]  https://hcpafl.orgjavascript:void(0)
+    → HEAD error: Failed to parse: https://hcpafl.orgjavascript:void(0)
+  FOUND on https://hcpafl.org/E-Filing/Hurricane-Damage-Assessment-Form:
+    [Using the HCPA Website]  https://hcpafl.org/LinkClick.aspx?fileticket=-S63S8TivLs%3d&tabid=321&portalid=1
+    → status=200 size=113747 type=application/pdf
+  FOUND on https://hcpafl.org/E-Filing/Hurricane-Damage-Assessment-Form:
+    [Tangible Personal Property]  https://hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption
+    → status=200 size=55737 type=text/html; charset=utf-8
+  FOUND on https://hcpafl.org/E-Filing/Hurricane-Damage-Assessment-Form:
+    [Downloads]  https://hcpafl.orgjavascript:void(0)
+    → HEAD error: Failed to parse: https://hcpafl.orgjavascript:void(0)
+  FOUND on http://gis.hcpafl.org/propertysearch#/nav/Basic Search:
+    [Tangible Personal Property]  https://hcpafl.org//hcpafl.org/Property-Info/Tangible-Personal-Property
+    → status=200 size=49436 type=text/html; charset=utf-8
+  FOUND on http://gis.hcpafl.org/propertysearch/#/nav/Advanced Search:
+    [Tangible Personal Property]  https://hcpafl.org//hcpafl.org/Property-Info/Tangible-Personal-Property
+    → status=200 size=49436 type=text/html; charset=utf-8
+  FOUND on http://gis.hcpafl.org/propertysearch/?usefullsite=true#/nav/Sales%20Search:
+    [Tangible Personal Property]  https://hcpafl.org//hcpafl.org/Property-Info/Tangible-Personal-Property
+    → status=200 size=49436 type=text/html; charset=utf-8
+  FOUND on http://gis.hcpafl.org/tppsearch/:
+    [Tangible Personal Property]  https://www.hcpafl.org/Property-Info/Tangible-Personal-Property
+    → status=200 size=55889 type=text/html; charset=utf-8
+  FOUND on http://gis.hcpafl.org/SubsidenceSearch/#/nav/Search:
+    [Tangible Personal Property]  https://www.hcpafl.org/Property-Info/Tangible-Personal-Property
+    → status=200 size=55889 type=text/html; charset=utf-8
+  FOUND on https://hcpafl.org/Search/Search-Help:
+    [Using the HCPA Website]  https://hcpafl.org/LinkClick.aspx?fileticket=-S63S8TivLs%3d&tabid=321&portalid=1
+    → status=200 size=113747 type=application/pdf
+  FOUND on https://hcpafl.org/Search/Search-Help:
+    [Tangible Personal Property]  https://hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption
+    → status=200 size=55737 type=text/html; charset=utf-8
+  FOUND on https://hcpafl.org/Search/Search-Help:
+    [Downloads]  https://hcpafl.orgjavascript:void(0)
+    → HEAD error: Failed to parse: https://hcpafl.orgjavascript:void(0)
+  FOUND on https://hcpafl.org/Links/Other-Agencies:
+    [Using the HCPA Website]  https://hcpafl.org/LinkClick.aspx?fileticket=-S63S8TivLs%3d&tabid=321&portalid=1
+    → status=200 size=113747 type=application/pdf
+  FOUND on https://hcpafl.org/Links/Other-Agencies:
+    [Tangible Personal Property]  https://hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption
+    → status=200 size=55737 type=text/html; charset=utf-8
+  FOUND on https://hcpafl.org/Links/Other-Agencies:
+    [Downloads]  https://hcpafl.orgjavascript:void(0)
+    → HEAD error: Failed to parse: https://hcpafl.orgjavascript:void(0)
+  FOUND on https://hcpafl.org/Contact-Us/Email-Us-Feedback:
+    [Using the HCPA Website]  https://hcpafl.org/LinkClick.aspx?fileticket=-S63S8TivLs%3d&tabid=321&portalid=1
+    → status=200 size=113747 type=application/pdf
+  FOUND on https://hcpafl.org/Contact-Us/Email-Us-Feedback:
+    [Tangible Personal Property]  https://hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption
+    → status=200 size=55737 type=text/html; charset=utf-8
+  FOUND on https://hcpafl.org/Contact-Us/Email-Us-Feedback:
+    [Downloads]  https://hcpafl.orgjavascript:void(0)
+    → HEAD error: Failed to parse: https://hcpafl.orgjavascript:void(0)
+  FOUND on https://hcpafl.org/Links/HCPA-Directors:
+    [Using the HCPA Website]  https://hcpafl.org/LinkClick.aspx?fileticket=-S63S8TivLs%3d&tabid=321&portalid=1
+    → status=200 size=113747 type=application/pdf
+  FOUND on https://hcpafl.org/Links/HCPA-Directors:
+    [Tangible Personal Property]  https://hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption
+    → status=200 size=55737 type=text/html; charset=utf-8
+  FOUND on https://hcpafl.org/Links/HCPA-Directors:
+    [Downloads]  https://hcpafl.orgjavascript:void(0)
+    → HEAD error: Failed to parse: https://hcpafl.orgjavascript:void(0)
+  FOUND on https://hcpafl.org/Contact-Us/Invite-Coach-Bob-as-Speaker:
+    [Using the HCPA Website]  https://hcpafl.org/LinkClick.aspx?fileticket=-S63S8TivLs%3d&tabid=321&portalid=1
+    → status=200 size=113747 type=application/pdf
+  FOUND on https://hcpafl.org/Contact-Us/Invite-Coach-Bob-as-Speaker:
+    [Tangible Personal Property]  https://hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption
+    → status=200 size=55737 type=text/html; charset=utf-8
+  FOUND on https://hcpafl.org/Contact-Us/Invite-Coach-Bob-as-Speaker:
+    [Downloads]  https://hcpafl.orgjavascript:void(0)
+    → HEAD error: Failed to parse: https://hcpafl.orgjavascript:void(0)
+  Error fetching https://hcpafl.orgjavascript:__doPostBack('dnn$dnnSearch$cmdSearch',''): Failed to parse: https://hcpafl.orgjavascript:__doPostBack('dnn$dnnSearch$cmdSearch','')
+  FOUND on https://hcpafl.org/Contact-Us/Our-Locations#DOWNTOWN:
+    [Using the HCPA Website]  https://hcpafl.org/LinkClick.aspx?fileticket=-S63S8TivLs%3d&tabid=321&portalid=1
+    → status=200 size=113747 type=application/pdf
+  FOUND on https://hcpafl.org/Contact-Us/Our-Locations#DOWNTOWN:
+    [Tangible Personal Property]  https://hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption
+    → status=200 size=55737 type=text/html; charset=utf-8
+  FOUND on https://hcpafl.org/Contact-Us/Our-Locations#DOWNTOWN:
+    [Downloads]  https://hcpafl.orgjavascript:void(0)
+    → HEAD error: Failed to parse: https://hcpafl.orgjavascript:void(0)
+  FOUND on https://hcpafl.org/Contact-Us/Our-Locations#BRANDON:
+    [Using the HCPA Website]  https://hcpafl.org/LinkClick.aspx?fileticket=-S63S8TivLs%3d&tabid=321&portalid=1
+    → status=200 size=113747 type=application/pdf
+  FOUND on https://hcpafl.org/Contact-Us/Our-Locations#BRANDON:
+    [Tangible Personal Property]  https://hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption
+    → status=200 size=55737 type=text/html; charset=utf-8
+  FOUND on https://hcpafl.org/Contact-Us/Our-Locations#BRANDON:
+    [Downloads]  https://hcpafl.orgjavascript:void(0)
+    → HEAD error: Failed to parse: https://hcpafl.orgjavascript:void(0)
+  Error fetching https://hcpafl.orgjavascript:;: Failed to parse: https://hcpafl.orgjavascript:;
+  FOUND on https://hcpafl.orgmailto:gisdept@hcpafl.org?subject=Aerial%20Imagery%20Request&body=Please%20include%20your%20name%2C%20phone%20number%20and%20area%20requested.:
+    [Using the HCPA Website]  https://hcpafl.org/LinkClick.aspx?fileticket=-S63S8TivLs%3d&tabid=321&portalid=1
+    → status=200 size=113747 type=application/pdf
+  FOUND on https://hcpafl.orgmailto:gisdept@hcpafl.org?subject=Aerial%20Imagery%20Request&body=Please%20include%20your%20name%2C%20phone%20number%20and%20area%20requested.:
+    [Tangible Personal Property]  https://hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption
+    → status=200 size=55737 type=text/html; charset=utf-8
+  FOUND on https://hcpafl.orgmailto:gisdept@hcpafl.org?subject=Aerial%20Imagery%20Request&body=Please%20include%20your%20name%2C%20phone%20number%20and%20area%20requested.:
+    [Downloads]  https://hcpafl.orgjavascript:void(0)
+    → HEAD error: Failed to parse: https://hcpafl.orgjavascript:void(0)
+  FOUND on https://hcpafl.orgmailto:gisdept@hcpafl.org?subject=Aerial%20Imagery%20Request&body=Please%20include%20your%20name%2C%20phone%20number%20and%20area%20requested.:
+    [Property Search]  https://hcpafl.org/LinkClick.aspx?link=%2fSearch%2fSearch-Real-Estate%2fBasic-Search&tabid=97&portalid=1&mid=575
+    → status=200 size=88448 type=text/html; charset=utf-8
+  FOUND on https://hcpafl.orgmailto:gisdept@hcpafl.org?subject=Aerial%20Imagery%20Request&body=Please%20include%20your%20name%2C%20phone%20number%20and%20area%20requested.:
+    [Map Search]  https://hcpafl.org/LinkClick.aspx?link=%2fSearch%2fSearch-GIS-Maps&tabid=97&portalid=1&mid=575
+    → status=200 size=23829 type=text/html; charset=utf-8
+  FOUND on https://hcpafl.orgmailto:gisdept@hcpafl.org?subject=Aerial%20Imagery%20Request&body=Please%20include%20your%20name%2C%20phone%20number%20and%20area%20requested.:
+    [EXEMPTIONS INFO]  https://hcpafl.org/LinkClick.aspx?link=%2fProperty-Info%2fHomestead-Other-Exemptions&tabid=97&portalid=1&mid=575
+    → status=200 size=62507 type=text/html; charset=utf-8
+  FOUND on https://hcpafl.orgmailto:gisdept@hcpafl.org?subject=Aerial%20Imagery%20Request&body=Please%20include%20your%20name%2C%20phone%20number%20and%20area%20requested.:
+    [Download Forms]  https://hcpafl.org/LinkClick.aspx?link=146&tabid=97&portalid=1&mid=575
+    → status=200 size=44031 type=text/html; charset=utf-8
+  FOUND on https://hcpafl.orgmailto:gisdept@hcpafl.org?subject=Aerial%20Imagery%20Request&body=Please%20include%20your%20name%2C%20phone%20number%20and%20area%20requested.:
+    [Maps & Data]  https://hcpafl.org/LinkClick.aspx?link=%2fDownloads%2fMaps-Data&tabid=97&portalid=1&mid=575
+    → status=200 size=45996 type=text/html; charset=utf-8
+  FOUND on https://hcpafl.orgmailto:gisdept@hcpafl.org?subject=Aerial%20Imagery%20Request&body=Please%20include%20your%20name%2C%20phone%20number%20and%20area%20requested.:
+    [Download property data]  https://hcpafl.org/Downloads/Maps-Data
+    → status=200 size=45996 type=text/html; charset=utf-8
+  FOUND on https://hcpafl.orgmailto:gisdept@hcpafl.org?subject=Aerial%20Imagery%20Request&body=Please%20include%20your%20name%2C%20phone%20number%20and%20area%20requested.:
+    [Read More]  http://www.hillsclerk.com/Additional-Services/Property-Fraud-Alert?textHighlight=Property%20Fraud%20Alert%20Service&exp=true
+    → status=200 size=? type=text/html;charset=UTF-8
+  Error fetching https://hcpafl.orgtel:(813) 272-6100: Failed to parse: https://hcpafl.orgtel:(813) 272-6100
+  FOUND on https://hcpafl.org/POBOR:
+    [Using the HCPA Website]  https://hcpafl.org/LinkClick.aspx?fileticket=-S63S8TivLs%3d&tabid=321&portalid=1
+    → status=200 size=113747 type=application/pdf
+  FOUND on https://hcpafl.org/POBOR:
+    [Tangible Personal Property]  https://hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption
+    → status=200 size=55737 type=text/html; charset=utf-8
+  FOUND on https://hcpafl.org/POBOR:
+    [Downloads]  https://hcpafl.orgjavascript:void(0)
+    → HEAD error: Failed to parse: https://hcpafl.orgjavascript:void(0)
+  FOUND on https://hcpafl.org/Disclaimer:
+    [Using the HCPA Website]  https://hcpafl.org/LinkClick.aspx?fileticket=-S63S8TivLs%3d&tabid=321&portalid=1
+    → status=200 size=113747 type=application/pdf
+  FOUND on https://hcpafl.org/Disclaimer:
+    [Tangible Personal Property]  https://hcpafl.org/Property-Info/Tangible-Personal-Property-Property-Exemption
+    → status=200 size=55737 type=text/html; charset=utf-8
+  FOUND on https://hcpafl.org/Disclaimer:
+    [Downloads]  https://hcpafl.orgjavascript:void(0)
+    → HEAD error: Failed to parse: https://hcpafl.orgjavascript:void(0)
