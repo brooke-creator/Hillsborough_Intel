@@ -45,7 +45,7 @@ jobs:
       - name: Run scraper
         env:
           LOOKBACK_DAYS: ${{ github.event.inputs.lookback_days || '7' }}
-        run: python scraper/debug_options.py
+        run: python scraper/fetch.py
 
       - name: Copy records to dashboard
         run: cp data/records.json dashboard/records.json || true
