@@ -29,7 +29,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 CLERK_URL        = "https://publicaccess.hillsclerk.com/oripublicaccess/"
 HCPA_BASE        = "https://gis.hcpafl.org/propertysearch"
 LOOKBACK_DAYS    = int(os.getenv("LOOKBACK_DAYS", "7"))
-ENRICH_MIN_SCORE = 50  # enriches ~200 leads (address + phone)
+ENRICH_MIN_SCORE = 55  # targets ~200 leads
 
 # Forewarn session token — store as GitHub secret FOREWARN_TOKEN
 # Format: "bearer 0295146c-70b1-439d-90a3-9d7676e32187"
@@ -700,6 +700,7 @@ async def main():
         for rec in all_records:
             owner = rec.get("owner", "")
             if (owner
+                    and rec.get("score", 0) >= ENRICH_MIN_SCORE
                     and not _is_placeholder(owner)
                     and owner not in unique_owners):
                 unique_owners[owner] = {}
@@ -737,7 +738,8 @@ async def main():
         else:
             to_call = [
                 r for r in all_records
-                if not _is_placeholder(r.get("owner", ""))
+                if r.get("score", 0) >= ENRICH_MIN_SCORE
+                and not _is_placeholder(r.get("owner", ""))
                 and not r.get("phone")
             ]
             seen: set[str] = set()
