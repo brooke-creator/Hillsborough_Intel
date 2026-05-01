@@ -105,7 +105,6 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); font
   justify-content: space-between;
   cursor: pointer;
 }
-.sidebar-label .chevron { transition: transform .2s; font-size: 10px; }
 
 .cat-item {
   display: flex;
@@ -127,16 +126,8 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); font
   flex-shrink: 0;
   transition: all .15s;
 }
-.cat-item.checked .cat-check {
-  background: var(--accent);
-  border-color: var(--accent);
-}
-.cat-item.checked .cat-check::after {
-  content: '✓';
-  color: white;
-  font-size: 9px;
-  font-weight: 700;
-}
+.cat-item.checked .cat-check { background: var(--accent); border-color: var(--accent); }
+.cat-item.checked .cat-check::after { content: '✓'; color: white; font-size: 9px; font-weight: 700; }
 .cat-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 .cat-name { flex: 1; font-size: 12px; color: var(--muted2); }
 .cat-item.checked .cat-name { color: var(--text); }
@@ -227,10 +218,7 @@ input[type="range"]::-webkit-slider-thumb {
   border-bottom: 1px solid var(--border);
   background: var(--surface);
 }
-.stat-cell {
-  padding: 12px 16px;
-  border-right: 1px solid var(--border);
-}
+.stat-cell { padding: 12px 16px; border-right: 1px solid var(--border); }
 .stat-cell:last-child { border-right: none; }
 .stat-val { font-size: 22px; font-weight: 700; font-family: var(--mono); letter-spacing: -1px; }
 .stat-lbl { font-size: 10px; color: var(--muted); margin-top: 1px; text-transform: uppercase; letter-spacing: .05em; }
@@ -329,6 +317,7 @@ tbody tr {
   cursor: pointer;
 }
 tbody tr:hover { background: var(--card); }
+tbody tr.is-corp { opacity: 0.45; }
 td { padding: 8px 12px; vertical-align: middle; }
 
 /* Score */
@@ -361,17 +350,9 @@ td { padding: 8px 12px; vertical-align: middle; }
 /* Doc type */
 .doc-type { font-family: var(--mono); font-size: 11px; }
 
-/* Amount */
-.amount { font-family: var(--mono); font-size: 12px; font-weight: 500; }
-
 /* Flags */
 .flags-wrap { display: flex; gap: 3px; flex-wrap: wrap; }
-.flag-pip {
-  width: 6px; height: 6px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  title: attr(data-tip);
-}
+.flag-pip { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
 
 /* Link */
 .doc-link { color: var(--accent2); text-decoration: none; font-family: var(--mono); font-size: 10px; }
@@ -547,21 +528,24 @@ const FLAG_COLORS = {
   'New this week':    '#22c55e',
 };
 
+function isCorpOwner(r) {
+  return (r.flags||[]).includes('LLC / corp owner');
+}
+
 async function load() {
   try {
     const r = await fetch('records.json?_=' + Date.now());
     const d = await r.json();
     ALL = d.records || [];
 
-    // Header
     document.getElementById('hdr-total').textContent = ALL.length.toLocaleString();
-    document.getElementById('hdr-hot').textContent = ALL.filter(r => r.score >= 80).length;
-    const avg = ALL.length ? Math.round(ALL.reduce((a,b) => a + b.score, 0) / ALL.length) : 0;
+    document.getElementById('hdr-hot').textContent = ALL.filter(r => r.score >= 80 && !isCorpOwner(r)).length;
+    const realLeads = ALL.filter(r => !isCorpOwner(r));
+    const avg = realLeads.length ? Math.round(realLeads.reduce((a,b) => a + b.score, 0) / realLeads.length) : 0;
     document.getElementById('hdr-avg').textContent = avg;
     document.getElementById('hdr-updated').textContent = d.fetched_at ? new Date(d.fetched_at).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'}) : '—';
     document.getElementById('stat-exposure').textContent = ALL.length.toLocaleString();
 
-    // Build category filters
     const cats = {};
     ALL.forEach(r => { cats[r.cat] = (cats[r.cat]||0)+1; });
     const catEl = document.getElementById('cat-filters');
@@ -584,7 +568,6 @@ async function load() {
       catEl.appendChild(div);
     });
 
-    // Build flag filters
     const flags = {};
     ALL.forEach(r => (r.flags||[]).forEach(f => { flags[f] = (flags[f]||0)+1; }));
     const flagEl = document.getElementById('flag-filters');
@@ -603,7 +586,6 @@ async function load() {
       flagEl.appendChild(div);
     });
 
-    // Tab clicks
     document.querySelectorAll('.tab').forEach(tab => {
       tab.onclick = () => {
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -634,7 +616,7 @@ function getFiltered() {
       if (!TAB_CATS[activeTab].includes(r.cat)) return false;
     }
     if (q) {
-      const hay = [r.owner, r.prop_address, r.mail_address, r.doc_num, r.grantee, r.legal, r.doc_type, r.cat_label].join(' ').toLowerCase();
+      const hay = [r.owner, r.prop_address, r.mail_address, r.doc_num, r.grantee, r.doc_type, r.cat_label].join(' ').toLowerCase();
       if (!hay.includes(q)) return false;
     }
     return true;
@@ -642,7 +624,15 @@ function getFiltered() {
 
   if (sort === 'filed') rows.sort((a,b) => (b.filed||'').localeCompare(a.filed||''));
   else if (sort === 'owner') rows.sort((a,b) => (a.owner||'').localeCompare(b.owner||''));
-  else rows.sort((a,b) => b.score - a.score);
+  else {
+    // Sort by score, but push corp/LLC owners to the bottom
+    rows.sort((a,b) => {
+      const aIsCorp = isCorpOwner(a) ? 1 : 0;
+      const bIsCorp = isCorpOwner(b) ? 1 : 0;
+      if (aIsCorp !== bIsCorp) return aIsCorp - bIsCorp;
+      return b.score - a.score;
+    });
+  }
 
   return rows;
 }
@@ -650,12 +640,12 @@ function getFiltered() {
 function render() {
   const rows = getFiltered();
 
-  // Stats
   document.getElementById('stat-total').textContent = rows.length.toLocaleString();
-  document.getElementById('stat-hot').textContent = rows.filter(r=>r.score>=80).length;
-  const avg = rows.length ? Math.round(rows.reduce((a,b)=>a+b.score,0)/rows.length) : 0;
+  document.getElementById('stat-hot').textContent = rows.filter(r=>r.score>=80 && !isCorpOwner(r)).length;
+  const realRows = rows.filter(r => !isCorpOwner(r));
+  const avg = realRows.length ? Math.round(realRows.reduce((a,b)=>a+b.score,0)/realRows.length) : 0;
   document.getElementById('stat-avg').textContent = avg;
-  document.getElementById('stat-new').textContent = rows.filter(r=>(r.flags||[]).includes('New this week')).length;
+  document.getElementById('stat-new').textContent = rows.filter(r=>(r.flags||[]).includes('New this week') && !isCorpOwner(r)).length;
   document.getElementById('showing-label').textContent = `Showing ${rows.length.toLocaleString()} of ${ALL.length.toLocaleString()}`;
 
   const tbody = document.getElementById('tbody');
@@ -667,24 +657,24 @@ function render() {
   document.getElementById('empty').style.display = 'none';
 
   tbody.innerHTML = rows.map(r => {
-    // Score dots (5 dots)
+    const corp = isCorpOwner(r);
+
+    // Score dots
     const dotCount = Math.round((r.score / 100) * 5);
     const dotClass = r.score >= 70 ? 'high' : r.score >= 50 ? 'med' : 'low';
     const dots = Array.from({length:5}, (_,i) =>
       `<div class="score-dot${i < dotCount ? ' on ' + dotClass : ''}"></div>`
     ).join('');
 
-    // Address
+    // Address — only show real addresses, never legal descriptions
     const addr = r.prop_address
       ? `<div class="addr-main">${r.prop_address}</div><div class="addr-sub">${[r.prop_city, r.prop_state, r.prop_zip].filter(Boolean).join(', ') || 'Tampa, FL'}</div>`
-      : r.legal
-        ? `<div class="addr-main" style="color:var(--muted);font-style:italic">${r.legal.slice(0,40)}…</div><div class="addr-sub">Tampa, FL</div>`
-        : `<div class="addr-main" style="color:var(--muted)">—</div>`;
+      : `<div class="addr-main" style="color:var(--muted)">—</div>`;
 
     // Category pill
     const catClass = `cat-pill c-${r.cat||'other'}`;
 
-    // Flags as colored dots with tooltips
+    // Flag dots
     const flagDots = (r.flags||[]).map(f => {
       const color = FLAG_COLORS[f] || '#64748b';
       return `<div class="flag-pip" style="background:${color}" title="${f}"></div>`;
@@ -695,7 +685,7 @@ function render() {
       ? `<a class="doc-link" href="${r.clerk_url}" target="_blank">${r.doc_num||'View'}</a>`
       : (r.doc_num ? `<span class="doc-link" style="color:var(--muted)">${r.doc_num}</span>` : '—');
 
-    return `<tr>
+    return `<tr${corp ? ' class="is-corp"' : ''}>
       <td>
         <div class="score-wrap">
           <div class="score-dots">${dots}</div>
@@ -714,12 +704,13 @@ function render() {
 }
 
 function exportCSV() {
-  const rows = getFiltered();
-  const headers = ['Score','Doc Type','Category','Filed','Owner','Grantee','Property Address','Property City','Property Zip','Mailing Address','Mailing City','Mailing State','Mailing Zip','Flags','Doc Number','Clerk URL'];
+  // Export only real homeowner leads (exclude corp/LLC)
+  const rows = getFiltered().filter(r => !isCorpOwner(r));
+  const headers = ['Score','Doc Type','Category','Filed','Owner','Property Address','Property City','Property State','Property Zip','Mailing Address','Mailing City','Mailing State','Mailing Zip','Flags','Doc Number','Clerk URL'];
   const esc = v => `"${String(v||'').replace(/"/g,'""')}"`;
   const csv = [headers.join(','), ...rows.map(r => [
-    r.score, r.doc_type, r.cat_label, r.filed, r.owner, r.grantee,
-    r.prop_address, r.prop_city, r.prop_zip,
+    r.score, r.doc_type, r.cat_label, r.filed, r.owner,
+    r.prop_address, r.prop_city, r.prop_state, r.prop_zip,
     r.mail_address, r.mail_city, r.mail_state, r.mail_zip,
     (r.flags||[]).join(' | '), r.doc_num, r.clerk_url
   ].map(esc).join(','))].join('\n');
