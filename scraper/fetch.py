@@ -29,7 +29,7 @@ HCPA_BASE        = "https://gis.hcpafl.org/propertysearch"
 LOOKBACK_DAYS    = int(os.getenv("LOOKBACK_DAYS", "7"))
 ENRICH_MIN_SCORE = 70   # only look up addresses for top leads
 
-OUTPUT_PATHS = [Path("records.json"), Path("data/records.json")]
+OUTPUT_PATHS  = [Path("dashboard/records.json"), Path("data/records.json")]
 GHL_CSV_PATH  = Path("data/ghl_export.csv")
 
 DOC_TYPE_MAP = {
@@ -156,6 +156,21 @@ def _parse_doc_type(raw: str) -> str:
     m = re.match(r"\(([A-Z0-9]+)\)", raw.strip())
     return m.group(1) if m else raw.strip().upper()
 
+def _is_legal_description(s: str) -> bool:
+    """Return True if string looks like a legal description not a street address."""
+    n = _norm(s)
+    if not n:
+        return False
+    # Real addresses start with a house number
+    if re.match(r"^\d+\s+[A-Z]", n):
+        return False
+    legal_patterns = [
+        r"^L \d+", r"^LOT \d+", r"^PB \d+", r"^OR BK", r"^PT ",
+        r"^SEC ", r"^BLK ", r"^TRACT ", r"^PARCEL", r"^SEE IMAGE",
+        r"^\d{2}[A-Z]{2}\d+", r"^26[A-Z]{2}\d+",
+    ]
+    return any(re.match(p, n) for p in legal_patterns)
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Scoring
@@ -180,7 +195,9 @@ def score_record(rec: dict):
     if doc == "PRO":
         flags.append("Probate / estate"); s += 10
     if re.search(r"\b(LLC|INC|CORP|LTD|TRUST|LP)\b", owner):
-        flags.append("LLC / corp owner"); s += 10
+        flags.append("LLC / corp owner")
+        # Institutions are NOT motivated sellers — cap their score low
+        return 35, flags
     if "Lis pendens" in flags and "Pre-foreclosure" in flags:
         s += 20
 
