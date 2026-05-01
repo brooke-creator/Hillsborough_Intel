@@ -1,12 +1,12 @@
 {
-  "fetched_at": "2026-05-01T17:55:05.832284Z",
+  "fetched_at": "2026-05-01T18:11:10.914434Z",
   "source": "Hillsborough County Clerk of Courts",
   "date_range": {
     "from": "04/24/2026",
     "to": "05/01/2026"
   },
   "lookback_days": 7,
-  "total": 2741,
+  "total": 2742,
   "with_address": 80,
   "records": [
     {
@@ -2467,6 +2467,33 @@
       "clerk_url": "https://publicaccess.hillsclerk.com/oripublicaccess/",
       "flags": [
         "Tax lien",
+        "New this week"
+      ],
+      "score": 45,
+      "phone": ""
+    },
+    {
+      "doc_num": "2026168840",
+      "doc_type": "JUD",
+      "filed": "2026-05-01",
+      "cat": "judgment",
+      "cat_label": "Judgment",
+      "owner": "WATSON LEROY",
+      "filer": "STATE OF FLORIDA",
+      "grantee": "WATSON LEROY",
+      "amount": null,
+      "legal": "",
+      "prop_address": "",
+      "prop_city": "",
+      "prop_state": "FL",
+      "prop_zip": "",
+      "mail_address": "",
+      "mail_city": "",
+      "mail_state": "FL",
+      "mail_zip": "",
+      "clerk_url": "https://publicaccess.hillsclerk.com/oripublicaccess/",
+      "flags": [
+        "Judgment lien",
         "New this week"
       ],
       "score": 45,
@@ -51700,6 +51727,58 @@
       "phone": ""
     },
     {
+      "doc_num": "2026168841",
+      "doc_type": "NOC",
+      "filed": "2026-05-01",
+      "cat": "construction",
+      "cat_label": "Notice of Commencement",
+      "owner": "LEWIS KAYLEIGH",
+      "filer": "LEWIS KAYLEIGH",
+      "grantee": "PROACTIVE CONSTRUCTION DESIGN LLC",
+      "amount": null,
+      "legal": "",
+      "prop_address": "",
+      "prop_city": "",
+      "prop_state": "FL",
+      "prop_zip": "",
+      "mail_address": "",
+      "mail_city": "",
+      "mail_state": "FL",
+      "mail_zip": "",
+      "clerk_url": "https://publicaccess.hillsclerk.com/oripublicaccess/",
+      "flags": [
+        "New this week"
+      ],
+      "score": 35,
+      "phone": ""
+    },
+    {
+      "doc_num": "2026168825",
+      "doc_type": "NOC",
+      "filed": "2026-05-01",
+      "cat": "construction",
+      "cat_label": "Notice of Commencement",
+      "owner": "TULLOS TYLER R.",
+      "filer": "TULLOS TYLER R.",
+      "grantee": "TOSCA ROOFING, INC.",
+      "amount": null,
+      "legal": "",
+      "prop_address": "",
+      "prop_city": "",
+      "prop_state": "FL",
+      "prop_zip": "",
+      "mail_address": "",
+      "mail_city": "",
+      "mail_state": "FL",
+      "mail_zip": "",
+      "clerk_url": "https://publicaccess.hillsclerk.com/oripublicaccess/",
+      "flags": [
+        "New this week"
+      ],
+      "score": 35,
+      "phone": ""
+    },
+    {
       "doc_num": "2026168790",
       "doc_type": "NOC",
       "filed": "2026-05-01",
@@ -72692,58 +72771,6 @@
       "grantee": "LANGFORD CONSTRUCTION SERVICES INC",
       "amount": null,
       "legal": "L 2 CARROLLWOOD VILL PH 2 VILL III #A",
-      "prop_address": "",
-      "prop_city": "",
-      "prop_state": "FL",
-      "prop_zip": "",
-      "mail_address": "",
-      "mail_city": "",
-      "mail_state": "FL",
-      "mail_zip": "",
-      "clerk_url": "https://publicaccess.hillsclerk.com/oripublicaccess/",
-      "flags": [
-        "New this week"
-      ],
-      "score": 35,
-      "phone": ""
-    },
-    {
-      "doc_num": "2026161202",
-      "doc_type": "NOC",
-      "filed": "2026-04-27",
-      "cat": "construction",
-      "cat_label": "Notice of Commencement",
-      "owner": "JEMISON MICHAEL",
-      "filer": "JEMISON MICHAEL",
-      "grantee": "SOLUTION SOURCE INC",
-      "amount": null,
-      "legal": "3806 MIDWAY RD PLANT CITY FL 33565",
-      "prop_address": "",
-      "prop_city": "",
-      "prop_state": "FL",
-      "prop_zip": "",
-      "mail_address": "",
-      "mail_city": "",
-      "mail_state": "FL",
-      "mail_zip": "",
-      "clerk_url": "https://publicaccess.hillsclerk.com/oripublicaccess/",
-      "flags": [
-        "New this week"
-      ],
-      "score": 35,
-      "phone": ""
-    },
-    {
-      "doc_num": "2026161195",
-      "doc_type": "NOC",
-      "filed": "2026-04-27",
-      "cat": "construction",
-      "cat_label": "Notice of Commencement",
-      "owner": "BARNES PATTI",
-      "filer": "BARNES PATTI",
-      "grantee": "AND SERVICES",
-      "amount": null,
-      "legal": "L 3 B 2 PEBBLE CREEK VILLAGE UNIT 3",
       "prop_address": "",
       "prop_city": "",
       "prop_state": "FL",
