@@ -29,7 +29,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 CLERK_URL        = "https://publicaccess.hillsclerk.com/oripublicaccess/"
 HCPA_BASE        = "https://gis.hcpafl.org/propertysearch"
 LOOKBACK_DAYS    = int(os.getenv("LOOKBACK_DAYS", "7"))
-ENRICH_MIN_SCORE = 70
+ENRICH_MIN_SCORE = 50  # enriches ~200 leads (address + phone)
 
 # Forewarn session token — store as GitHub secret FOREWARN_TOKEN
 # Format: "bearer 0295146c-70b1-439d-90a3-9d7676e32187"
@@ -455,7 +455,11 @@ def forewarn_search(token: str, first: str, last: str, city: str = "") -> str:
     try:
         r = requests.post(
             "https://api.forewarn.com/api/search",
-            json={"firstName": first.title(), "lastName": last.title()},
+            json={
+                "firstName": first.title(),
+                "lastName":  last.title(),
+                **( {"city": city.title()} if city else {} ),
+            },
             headers={
                 "Authorization": token,
                 "Content-Type": "application/json",
