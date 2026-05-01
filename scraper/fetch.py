@@ -29,7 +29,7 @@ HCPA_BASE        = "https://gis.hcpafl.org/propertysearch"
 LOOKBACK_DAYS    = int(os.getenv("LOOKBACK_DAYS", "7"))
 ENRICH_MIN_SCORE = 70   # only look up addresses for top leads
 
-OUTPUT_PATHS  = [Path("dashboard/records.json"), Path("data/records.json")]
+OUTPUT_PATHS = [Path("records.json"), Path("data/records.json")]
 GHL_CSV_PATH  = Path("data/ghl_export.csv")
 
 DOC_TYPE_MAP = {
