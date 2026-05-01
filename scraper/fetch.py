@@ -29,7 +29,11 @@ HCPA_BASE        = "https://gis.hcpafl.org/propertysearch"
 LOOKBACK_DAYS    = int(os.getenv("LOOKBACK_DAYS", "7"))
 ENRICH_MIN_SCORE = 70   # only look up addresses for top leads
 
-OUTPUT_PATHS  = [Path("dashboard/records.json"), Path("data/records.json")]
+# Forewarn credentials from GitHub Secrets
+FOREWARN_EMAIL    = os.getenv("FOREWARN_EMAIL", "")
+FOREWARN_PASSWORD = os.getenv("FOREWARN_PASSWORD", "")
+
+OUTPUT_PATHS  = [Path("records.json"), Path("data/records.json")]
 GHL_CSV_PATH  = Path("data/ghl_export.csv")
 
 DOC_TYPE_MAP = {
@@ -262,12 +266,8 @@ def _parse_html(html: str) -> list[dict]:
 
                 doc_num_raw = col(cells, "INSTRUMENT #", "INST #", "INST", "INSTRUMENT", "DOC #")
                 if not clerk_url and doc_num_raw:
-                    num = re.sub(r"\D", "", doc_num_raw)
-                    if len(num) >= 8:
-                        clerk_url = (
-                            "https://publicaccess.hillsclerk.com/oripublicaccess/"
-                            f"search.aspx?SearchType=OR&DocNumber={num}"
-                        )
+                    # Clerk site uses JS rendering — no direct doc links possible
+                    clerk_url = "https://publicaccess.hillsclerk.com/oripublicaccess/"
 
                 doc_type_raw = col(cells, "DOC TYPE", "TYPE", "DOCUMENT TYPE", "DOCTYPE")
                 doc_code = _parse_doc_type(doc_type_raw)
@@ -534,6 +534,206 @@ async def scrape_one_doc_type(
 # Main
 # ─────────────────────────────────────────────────────────────────────────────
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Forewarn phone number lookup via Playwright
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def forewarn_login(page) -> bool:
+    """Log into Forewarn. Returns True on success."""
+    if not FOREWARN_EMAIL or not FOREWARN_PASSWORD:
+        log.warning("Forewarn credentials not set — skipping phone lookup")
+        return False
+    try:
+        await page.goto("https://app.forewarn.com/login", wait_until="networkidle", timeout=30_000)
+        await page.wait_for_timeout(2_000)
+
+        # Fill email
+        await page.fill("input[type='email'], input[name='email'], input[placeholder*='mail']", FOREWARN_EMAIL)
+        await page.wait_for_timeout(300)
+
+        # Fill password
+        await page.fill("input[type='password']", FOREWARN_PASSWORD)
+        await page.wait_for_timeout(300)
+
+        # Click login button
+        await page.evaluate("""
+            () => {
+                for (const btn of document.querySelectorAll('button')) {
+                    const t = btn.textContent.trim().toUpperCase();
+                    if (t.includes('SIGN IN') || t.includes('LOG IN') || t.includes('LOGIN')) {
+                        btn.click(); return;
+                    }
+                }
+                // fallback — click first submit button
+                const sub = document.querySelector('button[type=submit]');
+                if (sub) sub.click();
+            }
+        """)
+        await page.wait_for_load_state("networkidle", timeout=15_000)
+        await page.wait_for_timeout(2_000)
+
+        # Check if logged in — search page should be visible
+        if "search" in page.url or "forewarn" in page.url:
+            log.info("Forewarn login successful")
+            return True
+        log.warning("Forewarn login may have failed — URL: %s", page.url)
+        return False
+    except Exception as e:
+        log.warning("Forewarn login error: %s", e)
+        return False
+
+
+async def forewarn_lookup(page, owner_name: str, zip_code: str) -> str:
+    """
+    Search Forewarn by name + zip and return the first mobile phone number.
+    Returns phone number string or empty string.
+    """
+    n = _norm(owner_name)
+    if not n or _is_institution(n):
+        return ""
+
+    first, last = _split_name(n)
+    if not first or not last:
+        return ""
+
+    try:
+        # Navigate to search page
+        await page.goto("https://app.forewarn.com/search", wait_until="networkidle", timeout=20_000)
+        await page.wait_for_timeout(1_500)
+
+        # Fill first name
+        for sel in ["input[placeholder*='First']", "input[name*='first']", "input[id*='first']"]:
+            try:
+                el = await page.query_selector(sel)
+                if el:
+                    await el.fill(first.title())
+                    break
+            except Exception:
+                continue
+
+        # Fill last name
+        for sel in ["input[placeholder*='Last']", "input[name*='last']", "input[id*='last']"]:
+            try:
+                el = await page.query_selector(sel)
+                if el:
+                    await el.fill(last.title())
+                    break
+            except Exception:
+                continue
+
+        # Fill zip code
+        if zip_code:
+            for sel in ["input[placeholder*='Zip']", "input[placeholder*='zip']", "input[name*='zip']"]:
+                try:
+                    el = await page.query_selector(sel)
+                    if el:
+                        await el.fill(zip_code[:5])
+                        break
+                except Exception:
+                    continue
+
+        await page.wait_for_timeout(300)
+
+        # Click Search
+        await page.evaluate("""
+            () => {
+                for (const btn of document.querySelectorAll('button')) {
+                    const t = btn.textContent.trim().toUpperCase();
+                    if (t === 'SEARCH' || t.includes('SEARCH')) { btn.click(); return; }
+                }
+            }
+        """)
+
+        await page.wait_for_load_state("networkidle", timeout=15_000)
+        await page.wait_for_timeout(2_000)
+
+        # On results page — find the best match and click it
+        # Results show full name + address — match by last name at minimum
+        html = await page.content()
+        from bs4 import BeautifulSoup as BS
+        soup = BS(html, "lxml")
+
+        # Find result rows — look for elements containing the name
+        last_upper = last.upper()
+        first_upper = first.upper()
+
+        # Try clicking the first result that contains our last name
+        clicked = await page.evaluate(f"""
+            () => {{
+                const items = document.querySelectorAll(
+                    '[class*="result"], [class*="card"], [class*="item"], li, tr'
+                );
+                for (const item of items) {{
+                    const t = item.textContent.toUpperCase();
+                    if (t.includes('{last_upper}') && t.includes('{first_upper}')) {{
+                        const link = item.querySelector('a') || item;
+                        link.click();
+                        return true;
+                    }}
+                }}
+                // fallback — click first result link
+                const first = document.querySelector(
+                    '[class*="result"] a, [class*="card"] a, .results a'
+                );
+                if (first) {{ first.click(); return true; }}
+                return false;
+            }}
+        """)
+
+        if not clicked:
+            log.debug("Forewarn: no result found for %s %s", first, last)
+            return ""
+
+        await page.wait_for_load_state("networkidle", timeout=15_000)
+        await page.wait_for_timeout(1_500)
+
+        # Now on profile page — click Phone Records
+        await page.evaluate("""
+            () => {
+                const els = document.querySelectorAll('a, button, [class*="record"], [class*="section"]');
+                for (const el of els) {
+                    if (el.textContent.toUpperCase().includes('PHONE')) {
+                        el.click(); return;
+                    }
+                }
+            }
+        """)
+
+        await page.wait_for_load_state("networkidle", timeout=10_000)
+        await page.wait_for_timeout(1_500)
+
+        # On phone records page — grab first mobile number
+        phone_js = r"""
+            () => {
+                const rows = document.querySelectorAll('tr, [class*="row"], [class*="record"]');
+                for (const row of rows) {
+                    const text = row.textContent.toUpperCase();
+                    if (text.includes('MOBILE')) {
+                        const match = row.textContent.match(
+                            /\b(\d{3}[-. ]\d{3}[-. ]\d{4})\b/
+                        );
+                        if (match) return match[0];
+                    }
+                }
+                const match = document.body.textContent.match(/\b(\d{3}[-. ]\d{3}[-. ]\d{4})\b/);
+                return match ? match[0] : '';
+            }
+        """
+        phone = await page.evaluate(phone_js)
+
+        if phone:
+            log.info("  ✓ Forewarn '%s %s' → %s", first, last, phone)
+        else:
+            log.debug("  ✗ Forewarn no phone: %s %s", first, last)
+
+        return phone or ""
+
+    except Exception as e:
+        log.debug("Forewarn lookup error [%s %s]: %s", first, last, e)
+        return ""
+
+
 async def main():
     date_to_dt   = datetime.utcnow()
     date_from_dt = date_to_dt - timedelta(days=LOOKBACK_DAYS)
@@ -541,7 +741,7 @@ async def main():
     date_to      = date_to_dt.strftime("%m/%d/%Y")
 
     log.info("=" * 64)
-    log.info("Hillsborough County Motivated Seller Scraper  v35")
+    log.info("Hillsborough County Motivated Seller Scraper  v36")
     log.info("Range : %s → %s  (%d days)", date_from, date_to, LOOKBACK_DAYS)
     log.info("=" * 64)
 
@@ -563,7 +763,8 @@ async def main():
             timezone_id="America/New_York",
         )
         clerk_page = await ctx.new_page()
-        hcpa_page  = await ctx.new_page()
+        hcpa_page      = await ctx.new_page()
+        forewarn_page  = await ctx.new_page()
 
         # ── Step 1: Scrape clerk portal ───────────────────────────────────────
         for doc_code, (cat, cat_label) in DOC_TYPE_MAP.items():
@@ -594,7 +795,7 @@ async def main():
                     "mail_address": "", "mail_city": "",
                     "mail_state":   "FL", "mail_zip": "",
                     "clerk_url":    r.get("clerk_url", ""),
-                    "flags":        [], "score": 0,
+                    "flags":        [], "score": 0, "phone": "",
                 }
                 score, flags = score_record(base_rec)
                 base_rec["score"] = score
@@ -640,6 +841,51 @@ async def main():
                 rec["score"] = score
                 rec["flags"] = flags
 
+        # ── Step 3: Forewarn phone lookup ─────────────────────────────────────
+        if FOREWARN_EMAIL and FOREWARN_PASSWORD:
+            logged_in = await forewarn_login(forewarn_page)
+            if logged_in:
+                # Only look up records that have an address (have zip code) and score >= 70
+                to_call = [
+                    r for r in all_records
+                    if r.get("score", 0) >= ENRICH_MIN_SCORE
+                    and not _is_institution(r.get("owner", ""))
+                    and not r.get("phone")  # skip if already has phone
+                ]
+                # Dedupe by owner name
+                seen_owners = set()
+                unique_call = []
+                for r in to_call:
+                    if r["owner"] not in seen_owners:
+                        seen_owners.add(r["owner"])
+                        unique_call.append(r)
+
+                log.info("Forewarn: looking up %d unique owners…", len(unique_call))
+                phone_map: dict[str, str] = {}
+                fw_found = 0
+
+                for i, rec in enumerate(unique_call):
+                    zip_code = rec.get("prop_zip") or rec.get("mail_zip") or ""
+                    phone = await forewarn_lookup(forewarn_page, rec["owner"], zip_code)
+                    phone_map[rec["owner"]] = phone
+                    if phone:
+                        fw_found += 1
+                    if (i + 1) % 25 == 0:
+                        log.info("  Forewarn: %d / %d — %d with phone",
+                                 i + 1, len(unique_call), fw_found)
+                    await asyncio.sleep(1)  # be respectful to Forewarn servers
+
+                # Apply phone numbers to all matching records
+                for rec in all_records:
+                    phone = phone_map.get(rec.get("owner", ""), "")
+                    if phone:
+                        rec["phone"] = phone
+
+                log.info("Forewarn done: %d / %d owners got phone numbers",
+                         fw_found, len(unique_call))
+        else:
+            log.info("Forewarn credentials not configured — skipping phone lookup")
+
         await browser.close()
 
     # ── Sort and save ─────────────────────────────────────────────────────────
@@ -666,7 +912,7 @@ async def main():
     # ── GHL CSV ───────────────────────────────────────────────────────────────
     GHL_CSV_PATH.parent.mkdir(parents=True, exist_ok=True)
     GHL_HEADERS = [
-        "First Name", "Last Name",
+        "First Name", "Last Name", "Phone",
         "Mailing Address", "Mailing City", "Mailing State", "Mailing Zip",
         "Property Address", "Property City", "Property State", "Property Zip",
         "Lead Type", "Document Type", "Date Filed", "Document Number",
@@ -681,6 +927,7 @@ async def main():
             w.writerow({
                 "First Name":             first,
                 "Last Name":              last,
+                "Phone":                  r.get("phone", ""),
                 "Mailing Address":        r.get("mail_address", ""),
                 "Mailing City":           r.get("mail_city", ""),
                 "Mailing State":          r.get("mail_state", "FL"),
