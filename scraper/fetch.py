@@ -678,10 +678,30 @@ async def forewarn_get_token(page) -> str:
         await page.wait_for_timeout(1_500)
 
         if token_from_search["value"]:
-            log.info("Forewarn bearer token captured")
+            log.info("Forewarn bearer token captured: %s...", token_from_search["value"][:20])
             return token_from_search["value"]
 
-        log.warning("Could not capture Forewarn bearer token")
+        # Last resort: check all localStorage/sessionStorage keys
+        all_storage = await page.evaluate("""
+            () => {
+                const data = {};
+                for (let i = 0; i < localStorage.length; i++) {
+                    const k = localStorage.key(i);
+                    data['ls_' + k] = localStorage.getItem(k);
+                }
+                for (let i = 0; i < sessionStorage.length; i++) {
+                    const k = sessionStorage.key(i);
+                    data['ss_' + k] = sessionStorage.getItem(k);
+                }
+                return data;
+            }
+        """)
+        log.info("Storage keys: %s", list(all_storage.keys())[:20])
+        for k, v in all_storage.items():
+            if v and len(str(v)) > 10:
+                log.info("  %s = %s...", k, str(v)[:60])
+
+        log.warning("Could not capture Forewarn bearer token — URL: %s", page.url)
         return ""
 
     except Exception as e:
@@ -713,7 +733,7 @@ def forewarn_search(bearer_token: str, first: str, last: str, city: str = "") ->
             timeout=15,
         )
         if r.status_code != 200:
-            log.debug("Forewarn API %s: %s", r.status_code, r.text[:100])
+            log.info("Forewarn API %s for %s %s: %s", r.status_code, first, last, r.text[:200])
             return ""
 
         data = r.json()
@@ -1199,6 +1219,16 @@ async def main():
                         unique_call.append(r)
 
                 log.info("Forewarn: looking up %d unique owners via API…", len(unique_call))
+                # Test first lookup with full debug
+                if unique_call:
+                    test_rec = unique_call[0]
+                    test_first, test_last = _split_name(test_rec["owner"])
+                    log.info("TEST Forewarn lookup: owner=%s first=%s last=%s city=%s",
+                             test_rec["owner"], test_first, test_last,
+                             test_rec.get("prop_city",""))
+                    test_phone = forewarn_search(bearer_token, test_first, test_last,
+                                                  test_rec.get("prop_city",""))
+                    log.info("TEST result: phone=%s", test_phone or "NONE")
                 phone_map: dict[str, str] = {}
                 fw_found = 0
 
