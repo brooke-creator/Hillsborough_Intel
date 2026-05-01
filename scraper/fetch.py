@@ -613,9 +613,12 @@ async def forewarn_get_token(page) -> str:
         token_from_search = {"value": ""}
 
         async def capture_auth(request):
-            auth = request.headers.get("authorization", "")
-            if auth and "forewarn" in request.url:
-                token_from_search["value"] = auth.replace("bearer ", "").replace("Bearer ", "").strip()
+            if "api.forewarn.com" in request.url:
+                auth = request.headers.get("authorization", "")
+                if auth:
+                    # Store the full auth header value as-is
+                    token_from_search["value"] = auth.strip()
+                    log.info("Captured auth header: %s...", auth[:40])
 
         page.on("request", capture_auth)
 
@@ -719,7 +722,7 @@ def forewarn_search(bearer_token: str, first: str, last: str, city: str = "") ->
     try:
         import requests as req
         headers = {
-            "Authorization": f"bearer {bearer_token}",
+            "Authorization": bearer_token,  # full value e.g. "bearer abc123..."
             "Content-Type": "application/json",
             "Origin": "https://app.forewarn.com",
             "Referer": "https://app.forewarn.com/",
