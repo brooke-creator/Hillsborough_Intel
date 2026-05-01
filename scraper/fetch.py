@@ -536,6 +536,328 @@ async def scrape_one_doc_type(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Forewarn phone lookup — uses bearer token from Playwright login session
+# then calls api.forewarn.com/api/search directly (no UI scraping needed)
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def forewarn_get_token(page) -> str:
+    """Log into Forewarn via Playwright and extract the bearer token."""
+    if not FOREWARN_EMAIL or not FOREWARN_PASSWORD:
+        log.warning("Forewarn credentials not set — skipping phone lookup")
+        return ""
+    try:
+        await page.goto("https://app.forewarn.com/", wait_until="networkidle", timeout=30_000)
+        await page.wait_for_timeout(2_000)
+
+        # If already logged in, grab token from localStorage/sessionStorage
+        token = await page.evaluate("""
+            () => {
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    const val = localStorage.getItem(key);
+                    if (val && val.length > 20 && (key.includes('token') || key.includes('auth') || key.includes('jwt'))) {
+                        return val;
+                    }
+                }
+                for (let i = 0; i < sessionStorage.length; i++) {
+                    const key = sessionStorage.key(i);
+                    const val = sessionStorage.getItem(key);
+                    if (val && val.length > 20 && (key.includes('token') || key.includes('auth') || key.includes('jwt'))) {
+                        return val;
+                    }
+                }
+                return '';
+            }
+        """)
+        if token:
+            log.info("Forewarn token found in storage")
+            return token.strip()
+
+        # Need to log in — intercept the API call to grab the token
+        token_holder = {"value": ""}
+
+        async def intercept_response(response):
+            if "forewarn.com" in response.url and response.status == 200:
+                try:
+                    headers = response.headers
+                    auth = headers.get("authorization", "")
+                    if auth:
+                        token_holder["value"] = auth.replace("bearer ", "").replace("Bearer ", "").strip()
+                except Exception:
+                    pass
+
+        # Navigate to login
+        await page.goto("https://app.forewarn.com/login", wait_until="networkidle", timeout=30_000)
+        await page.wait_for_timeout(1_500)
+
+        # Fill credentials
+        for sel in ["input[type='email']", "input[placeholder*='mail']", "input[name*='email']"]:
+            try:
+                el = await page.query_selector(sel)
+                if el and await el.is_visible():
+                    await el.fill(FOREWARN_EMAIL)
+                    break
+            except Exception:
+                continue
+
+        for sel in ["input[type='password']"]:
+            try:
+                el = await page.query_selector(sel)
+                if el:
+                    await el.fill(FOREWARN_PASSWORD)
+                    break
+            except Exception:
+                continue
+
+        # Intercept network to grab token
+        token_from_search = {"value": ""}
+
+        async def capture_auth(request):
+            auth = request.headers.get("authorization", "")
+            if auth and "forewarn" in request.url:
+                token_from_search["value"] = auth.replace("bearer ", "").replace("Bearer ", "").strip()
+
+        page.on("request", capture_auth)
+
+        # Click login
+        await page.evaluate("""
+            () => {
+                for (const btn of document.querySelectorAll('button')) {
+                    const t = btn.textContent.trim().toUpperCase();
+                    if (t.includes('SIGN') || t.includes('LOG') || t.includes('LOGIN')) {
+                        btn.click(); return;
+                    }
+                }
+                const sub = document.querySelector('button[type=submit]');
+                if (sub) sub.click();
+            }
+        """)
+        await page.wait_for_load_state("networkidle", timeout=15_000)
+        await page.wait_for_timeout(2_000)
+
+        # Do a dummy search to trigger an authenticated API call and capture the token
+        await page.goto("https://app.forewarn.com/search", wait_until="networkidle", timeout=20_000)
+        await page.wait_for_timeout(1_000)
+
+        # Click Search By Name and do a quick search to get the token
+        await page.evaluate("""
+            () => {
+                const els = [...document.querySelectorAll('a, button, span')];
+                const el = els.find(e => e.textContent.toUpperCase().includes('SEARCH BY NAME'));
+                if (el) el.click();
+            }
+        """)
+        await page.wait_for_timeout(1_000)
+
+        # Fill and submit a test search
+        for sel in ["input[placeholder*='First']", "input[placeholder*='first']"]:
+            try:
+                el = await page.query_selector(sel)
+                if el and await el.is_visible():
+                    await el.fill("John")
+                    break
+            except Exception:
+                continue
+        for sel in ["input[placeholder*='Last']", "input[placeholder*='last']"]:
+            try:
+                el = await page.query_selector(sel)
+                if el and await el.is_visible():
+                    await el.fill("Smith")
+                    break
+            except Exception:
+                continue
+
+        await page.evaluate("""
+            () => {
+                for (const btn of document.querySelectorAll('button')) {
+                    if (btn.textContent.trim().toUpperCase() === 'SEARCH') { btn.click(); return; }
+                }
+            }
+        """)
+        await page.wait_for_load_state("networkidle", timeout=10_000)
+        await page.wait_for_timeout(1_500)
+
+        if token_from_search["value"]:
+            log.info("Forewarn bearer token captured")
+            return token_from_search["value"]
+
+        log.warning("Could not capture Forewarn bearer token")
+        return ""
+
+    except Exception as e:
+        log.warning("Forewarn token error: %s", e)
+        return ""
+
+
+def forewarn_search(bearer_token: str, first: str, last: str, city: str = "") -> str:
+    """
+    Call Forewarn API directly with bearer token.
+    Returns the first mobile phone number for the best matching result.
+    """
+    if not bearer_token:
+        return ""
+    try:
+        import requests as req
+        headers = {
+            "Authorization": f"bearer {bearer_token}",
+            "Content-Type": "application/json",
+            "Origin": "https://app.forewarn.com",
+            "Referer": "https://app.forewarn.com/",
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+        }
+        payload = {"firstName": first.title(), "lastName": last.title()}
+        r = req.post(
+            "https://api.forewarn.com/api/search",
+            json=payload,
+            headers=headers,
+            timeout=15,
+        )
+        if r.status_code != 200:
+            log.debug("Forewarn API %s: %s", r.status_code, r.text[:100])
+            return ""
+
+        data = r.json()
+        results = data.get("result", [])
+        if not results:
+            return ""
+
+        # Pick best result — prefer one matching our city (FL)
+        best = None
+        city_upper = city.upper() if city else ""
+
+        for res in results:
+            if res.get("isDead"):
+                continue
+            addresses = res.get("address", [])
+            # Check if any address matches our city/state
+            for addr in addresses:
+                if addr.get("state") == "FL":
+                    if not city_upper or city_upper in addr.get("city", "").upper():
+                        best = res
+                        break
+            if best:
+                break
+
+        # Fallback: first non-dead result
+        if not best:
+            for res in results:
+                if not res.get("isDead"):
+                    best = res
+                    break
+
+        if not best:
+            return ""
+
+        # Get first mobile phone number
+        for phone in best.get("phone", []):
+            if phone.get("type", "").lower() == "mobile" and phone.get("number"):
+                return phone["number"]
+
+        # Fallback: any phone number
+        phones = best.get("phone", [])
+        if phones:
+            return phones[0].get("number", "")
+
+        return ""
+
+    except Exception as e:
+        log.debug("Forewarn search error [%s %s]: %s", first, last, e)
+        return ""
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Clerk scraper
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def scrape_one_doc_type(
+    page, doc_code: str, date_from: str, date_to: str
+) -> list[dict]:
+    option_value = CLERK_OPTION_VALUES.get(doc_code)
+    if not option_value:
+        return []
+
+    results = []
+    for attempt in range(1, 4):
+        try:
+            await page.goto(CLERK_URL, wait_until="networkidle", timeout=60_000)
+            await page.wait_for_timeout(2_000)
+
+            set_result = await page.evaluate(f"""
+                () => {{
+                    const sel = document.getElementById('OBKey__1285_1');
+                    if (!sel) return 'ERROR: select not found';
+                    let found = null;
+                    for (const opt of sel.options) {{
+                        if (opt.value === '{option_value}') {{ found = opt; break; }}
+                    }}
+                    if (!found) return 'ERROR: option not found';
+                    sel.value = found.value;
+                    sel.dispatchEvent(new Event('change', {{bubbles: true}}));
+                    if (window.jQuery) window.jQuery(sel).trigger('chosen:updated');
+                    return 'OK: ' + found.value;
+                }}
+            """)
+            log.info("[%s] dropdown → %s", doc_code, set_result)
+            if "ERROR" in str(set_result):
+                return []
+
+            await page.wait_for_timeout(500)
+            await page.evaluate(f"""
+                () => {{
+                    const b = document.getElementById('OBKey__1634_1');
+                    const e = document.getElementById('OBKey__1634_2');
+                    if (b) {{ b.value = '{date_from}'; b.dispatchEvent(new Event('change', {{bubbles:true}})); }}
+                    if (e) {{ e.value = '{date_to}';   e.dispatchEvent(new Event('change', {{bubbles:true}})); }}
+                }}
+            """)
+            await page.wait_for_timeout(300)
+            await page.evaluate("""
+                () => {
+                    const btn = document.getElementById('sub');
+                    if (btn) { btn.click(); return; }
+                    for (const el of document.querySelectorAll('button'))
+                        if ((el.textContent||'').trim().toUpperCase()==='SEARCH') { el.click(); return; }
+                }
+            """)
+            log.info("[%s] search clicked", doc_code)
+            await page.wait_for_load_state("networkidle", timeout=30_000)
+            await page.wait_for_timeout(3_000)
+
+            page_num = 1
+            while True:
+                html = await page.content()
+                rows = _parse_html(html)
+                results.extend(rows)
+                log.info("[%s] pg %d: +%d rows (total %d)",
+                         doc_code, page_num, len(rows), len(results))
+                soup = BeautifulSoup(html, "lxml")
+                if not soup.find("a", string=re.compile(r"^\s*(Next|>>)\s*$", re.I)):
+                    break
+                try:
+                    await page.click("a:has-text('Next')", timeout=8_000)
+                    await page.wait_for_load_state("networkidle", timeout=20_000)
+                    await page.wait_for_timeout(1_500)
+                    page_num += 1
+                except Exception:
+                    break
+
+            log.info("[%s] DONE — %d records", doc_code, len(results))
+            return results
+
+        except PWTimeout:
+            log.warning("[%s] timeout attempt %d/3", doc_code, attempt)
+        except Exception as exc:
+            log.warning("[%s] error attempt %d: %s", doc_code, attempt, exc)
+        await asyncio.sleep(3)
+    return results
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Main
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Forewarn phone number lookup via Playwright
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -598,25 +920,40 @@ async def forewarn_lookup(page, owner_name: str, zip_code: str) -> str:
         return ""
 
     try:
-        # Navigate to search page
+        # Navigate to search page and click "SEARCH BY NAME"
         await page.goto("https://app.forewarn.com/search", wait_until="networkidle", timeout=20_000)
         await page.wait_for_timeout(1_500)
 
+        # Click "SEARCH BY NAME" link to get name fields
+        await page.evaluate("""
+            () => {
+                const links = document.querySelectorAll('a, button, span');
+                for (const el of links) {
+                    if (el.textContent.trim().toUpperCase().includes('SEARCH BY NAME')) {
+                        el.click(); return;
+                    }
+                }
+            }
+        """)
+        await page.wait_for_timeout(1_500)
+
         # Fill first name
-        for sel in ["input[placeholder*='First']", "input[name*='first']", "input[id*='first']"]:
+        for sel in ["input[placeholder*='First']", "input[name*='first']",
+                    "input[id*='first']", "input[aria-label*='First']"]:
             try:
                 el = await page.query_selector(sel)
-                if el:
+                if el and await el.is_visible():
                     await el.fill(first.title())
                     break
             except Exception:
                 continue
 
         # Fill last name
-        for sel in ["input[placeholder*='Last']", "input[name*='last']", "input[id*='last']"]:
+        for sel in ["input[placeholder*='Last']", "input[name*='last']",
+                    "input[id*='last']", "input[aria-label*='Last']"]:
             try:
                 el = await page.query_selector(sel)
-                if el:
+                if el and await el.is_visible():
                     await el.fill(last.title())
                     break
             except Exception:
@@ -624,10 +961,11 @@ async def forewarn_lookup(page, owner_name: str, zip_code: str) -> str:
 
         # Fill zip code
         if zip_code:
-            for sel in ["input[placeholder*='Zip']", "input[placeholder*='zip']", "input[name*='zip']"]:
+            for sel in ["input[placeholder*='Zip']", "input[placeholder*='zip']",
+                        "input[name*='zip']", "input[id*='zip']"]:
                 try:
                     el = await page.query_selector(sel)
-                    if el:
+                    if el and await el.is_visible():
                         await el.fill(zip_code[:5])
                         break
                 except Exception:
@@ -635,7 +973,7 @@ async def forewarn_lookup(page, owner_name: str, zip_code: str) -> str:
 
         await page.wait_for_timeout(300)
 
-        # Click Search
+        # Click Search button
         await page.evaluate("""
             () => {
                 for (const btn of document.querySelectorAll('button')) {
@@ -843,39 +1181,42 @@ async def main():
 
         # ── Step 3: Forewarn phone lookup ─────────────────────────────────────
         if FOREWARN_EMAIL and FOREWARN_PASSWORD:
-            logged_in = await forewarn_login(forewarn_page)
-            if logged_in:
-                # Only look up records that have an address (have zip code) and score >= 70
+            log.info("Getting Forewarn bearer token…")
+            bearer_token = await forewarn_get_token(forewarn_page)
+            if bearer_token:
+                # Dedupe owners for lookup
                 to_call = [
                     r for r in all_records
                     if r.get("score", 0) >= ENRICH_MIN_SCORE
                     and not _is_institution(r.get("owner", ""))
-                    and not r.get("phone")  # skip if already has phone
+                    and not r.get("phone")
                 ]
-                # Dedupe by owner name
-                seen_owners = set()
+                seen_owners: set[str] = set()
                 unique_call = []
                 for r in to_call:
                     if r["owner"] not in seen_owners:
                         seen_owners.add(r["owner"])
                         unique_call.append(r)
 
-                log.info("Forewarn: looking up %d unique owners…", len(unique_call))
+                log.info("Forewarn: looking up %d unique owners via API…", len(unique_call))
                 phone_map: dict[str, str] = {}
                 fw_found = 0
 
                 for i, rec in enumerate(unique_call):
-                    zip_code = rec.get("prop_zip") or rec.get("mail_zip") or ""
-                    phone = await forewarn_lookup(forewarn_page, rec["owner"], zip_code)
+                    first, last = _split_name(rec["owner"])
+                    if not first or not last:
+                        continue
+                    city = rec.get("prop_city") or rec.get("mail_city") or ""
+                    phone = forewarn_search(bearer_token, first, last, city)
                     phone_map[rec["owner"]] = phone
                     if phone:
                         fw_found += 1
+                        log.info("  ✓ Forewarn '%s' → %s", rec["owner"][:40], phone)
                     if (i + 1) % 25 == 0:
                         log.info("  Forewarn: %d / %d — %d with phone",
                                  i + 1, len(unique_call), fw_found)
-                    await asyncio.sleep(1)  # be respectful to Forewarn servers
+                    await asyncio.sleep(0.5)
 
-                # Apply phone numbers to all matching records
                 for rec in all_records:
                     phone = phone_map.get(rec.get("owner", ""), "")
                     if phone:
@@ -883,6 +1224,8 @@ async def main():
 
                 log.info("Forewarn done: %d / %d owners got phone numbers",
                          fw_found, len(unique_call))
+            else:
+                log.warning("Could not get Forewarn token — skipping phone lookup")
         else:
             log.info("Forewarn credentials not configured — skipping phone lookup")
 
