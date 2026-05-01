@@ -488,6 +488,7 @@ td { padding: 8px 12px; vertical-align: middle; }
             <th>Score</th>
             <th>Address</th>
             <th>Owner</th>
+            <th>Phone</th>
             <th>Category</th>
             <th>Doc Type</th>
             <th>Filed</th>
@@ -680,10 +681,11 @@ function render() {
       return `<div class="flag-pip" style="background:${color}" title="${f}"></div>`;
     }).join('');
 
-    // Doc link
-    const docLink = r.clerk_url
-      ? `<a class="doc-link" href="${r.clerk_url}" target="_blank">${r.doc_num||'View'}</a>`
-      : (r.doc_num ? `<span class="doc-link" style="color:var(--muted)">${r.doc_num}</span>` : '—');
+    // Doc # — show number as copyable text, link opens clerk search page
+    const docLink = r.doc_num
+      ? `<span class="doc-link" style="color:var(--muted2);cursor:pointer" onclick="navigator.clipboard.writeText('${r.doc_num}');this.textContent='Copied!';setTimeout(()=>this.textContent='${r.doc_num}',1500)" title="Click to copy">${r.doc_num}</span>
+         <a class="doc-link" href="https://publicaccess.hillsclerk.com/oripublicaccess/" target="_blank" style="margin-left:4px;font-size:9px;color:var(--muted)" title="Open clerk portal">↗</a>`
+      : '—';
 
     return `<tr${corp ? ' class="is-corp"' : ''}>
       <td>
@@ -694,6 +696,7 @@ function render() {
       </td>
       <td>${addr}</td>
       <td><div class="owner-name">${r.owner||'—'}</div></td>
+      <td><div style="font-family:var(--mono);font-size:11px;color:${r.phone ? 'var(--green)' : 'var(--muted)'}">${r.phone||'—'}</div></td>
       <td><span class="${catClass}">${r.cat_label||r.cat||'—'}</span></td>
       <td><span class="doc-type" style="color:var(--muted2)">${r.doc_type||'—'}</span></td>
       <td style="color:var(--muted);font-family:var(--mono);font-size:11px;white-space:nowrap">${r.filed||'—'}</td>
