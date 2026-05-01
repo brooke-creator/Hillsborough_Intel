@@ -23,7 +23,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install requests beautifulsoup4 lxml playwright dbfread
+        run: pip install requests beautifulsoup4 lxml playwright
 
       - name: Install Playwright browsers
         run: python -m playwright install --with-deps chromium
@@ -31,8 +31,7 @@ jobs:
       - name: Run scraper
         env:
           LOOKBACK_DAYS: 7
-          FOREWARN_EMAIL: ${{ secrets.FOREWARN_EMAIL }}
-          FOREWARN_PASSWORD: ${{ secrets.FOREWARN_PASSWORD }}
+          FOREWARN_TOKEN: ${{ secrets.FOREWARN_TOKEN }}
         run: python scraper/fetch.py
 
       - name: Commit and push results
