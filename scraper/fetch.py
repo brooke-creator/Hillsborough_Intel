@@ -128,6 +128,16 @@ def _is_institution(name: str) -> bool:
         return False
     return any(k in n for k in INSTITUTION_KEYWORDS)
 
+def _is_placeholder(name: str) -> bool:
+    """Return True if name is a non-person placeholder not worth looking up."""
+    n = _norm(name)
+    placeholders = [
+        "TENANT UNKNOWN", "UNKNOWN TENANT", "TENANT #", "#1 TENANT",
+        "TENANTS UNKNOWN", "UNKNOWN", "TO BE DETERMINED", "TBD",
+        "OCCUPANT", "RESIDENT", "ALL OCCUPANTS",
+    ]
+    return any(p in n for p in placeholders)
+
 def _resolve_owner(doc_type: str, grantor: str, grantee: str) -> str:
     g1 = _norm(grantor)
     g2 = _norm(grantee)
@@ -188,7 +198,7 @@ def score_record(rec: dict):
         flags.append("Probate / estate"); s += 10
     if re.search(r"\b(LLC|INC|CORP|LTD|TRUST|LP)\b", owner):
         flags.append("LLC / corp owner")
-        return 35, flags
+        s += 10
     if "Lis pendens" in flags and "Pre-foreclosure" in flags:
         s += 20
 
@@ -689,8 +699,8 @@ async def main():
         unique_owners: dict[str, dict] = {}
         for rec in all_records:
             owner = rec.get("owner", "")
-            if (owner and rec.get("score", 0) >= ENRICH_MIN_SCORE
-                    and not _is_institution(owner)
+            if (owner
+                    and not _is_placeholder(owner)
                     and owner not in unique_owners):
                 unique_owners[owner] = {}
 
@@ -727,8 +737,7 @@ async def main():
         else:
             to_call = [
                 r for r in all_records
-                if r.get("score", 0) >= ENRICH_MIN_SCORE
-                and not _is_institution(r.get("owner", ""))
+                if not _is_placeholder(r.get("owner", ""))
                 and not r.get("phone")
             ]
             seen: set[str] = set()
