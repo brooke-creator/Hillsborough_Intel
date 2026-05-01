@@ -1,9 +1,10 @@
 """
-Hillsborough County Motivated Seller Lead Scraper v35
-Change from v34:
-  - Only enrich owners with score >= 70 (~150-200 lookups vs 2000)
-  - Finishes well within 90 minute GitHub Actions timeout
-  - Lower-scored records still appear in dashboard, just without addresses
+Hillsborough County Motivated Seller Lead Scraper v37
+- Clerk portal scraping (Playwright)
+- HCPA address enrichment (Playwright)
+- Forewarn phone lookup via stored session token + refresh endpoint
+  Set FOREWARN_TOKEN secret as "bearer UUID" from your browser session
+  Token valid 24hrs from login; refresh call extends 30-min expiry
 """
 
 import asyncio
@@ -12,10 +13,11 @@ import json
 import logging
 import os
 import re
+import requests
+import urllib3
 from datetime import datetime, timedelta
 from pathlib import Path
 
-import urllib3
 from bs4 import BeautifulSoup
 from playwright.async_api import async_playwright, TimeoutError as PWTimeout
 
@@ -27,14 +29,15 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 CLERK_URL        = "https://publicaccess.hillsclerk.com/oripublicaccess/"
 HCPA_BASE        = "https://gis.hcpafl.org/propertysearch"
 LOOKBACK_DAYS    = int(os.getenv("LOOKBACK_DAYS", "7"))
-ENRICH_MIN_SCORE = 70   # only look up addresses for top leads
+ENRICH_MIN_SCORE = 70
 
-# Forewarn credentials from GitHub Secrets
-FOREWARN_EMAIL    = os.getenv("FOREWARN_EMAIL", "")
-FOREWARN_PASSWORD = os.getenv("FOREWARN_PASSWORD", "")
+# Forewarn session token — store as GitHub secret FOREWARN_TOKEN
+# Format: "bearer 0295146c-70b1-439d-90a3-9d7676e32187"
+# Get it from Network tab after logging into app.forewarn.com
+FOREWARN_TOKEN = os.getenv("FOREWARN_TOKEN", "")
 
-OUTPUT_PATHS  = [Path("records.json"), Path("data/records.json")]
-GHL_CSV_PATH  = Path("data/ghl_export.csv")
+OUTPUT_PATHS = [Path("records.json"), Path("data/records.json")]
+GHL_CSV_PATH = Path("data/ghl_export.csv")
 
 DOC_TYPE_MAP = {
     "LP":       ("foreclosure",  "Lis Pendens"),
@@ -160,21 +163,6 @@ def _parse_doc_type(raw: str) -> str:
     m = re.match(r"\(([A-Z0-9]+)\)", raw.strip())
     return m.group(1) if m else raw.strip().upper()
 
-def _is_legal_description(s: str) -> bool:
-    """Return True if string looks like a legal description not a street address."""
-    n = _norm(s)
-    if not n:
-        return False
-    # Real addresses start with a house number
-    if re.match(r"^\d+\s+[A-Z]", n):
-        return False
-    legal_patterns = [
-        r"^L \d+", r"^LOT \d+", r"^PB \d+", r"^OR BK", r"^PT ",
-        r"^SEC ", r"^BLK ", r"^TRACT ", r"^PARCEL", r"^SEE IMAGE",
-        r"^\d{2}[A-Z]{2}\d+", r"^26[A-Z]{2}\d+",
-    ]
-    return any(re.match(p, n) for p in legal_patterns)
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Scoring
@@ -200,7 +188,6 @@ def score_record(rec: dict):
         flags.append("Probate / estate"); s += 10
     if re.search(r"\b(LLC|INC|CORP|LTD|TRUST|LP)\b", owner):
         flags.append("LLC / corp owner")
-        # Institutions are NOT motivated sellers — cap their score low
         return 35, flags
     if "Lis pendens" in flags and "Pre-foreclosure" in flags:
         s += 20
@@ -257,7 +244,7 @@ def _parse_html(html: str) -> list[dict]:
             if not cells:
                 continue
             try:
-                clerk_url = ""
+                clerk_url = "https://publicaccess.hillsclerk.com/oripublicaccess/"
                 for a in row.find_all("a", href=True):
                     href = a["href"].strip()
                     if href and "javascript" not in href.lower():
@@ -265,10 +252,6 @@ def _parse_html(html: str) -> list[dict]:
                         break
 
                 doc_num_raw = col(cells, "INSTRUMENT #", "INST #", "INST", "INSTRUMENT", "DOC #")
-                if not clerk_url and doc_num_raw:
-                    # Clerk site uses JS rendering — no direct doc links possible
-                    clerk_url = "https://publicaccess.hillsclerk.com/oripublicaccess/"
-
                 doc_type_raw = col(cells, "DOC TYPE", "TYPE", "DOCUMENT TYPE", "DOCTYPE")
                 doc_code = _parse_doc_type(doc_type_raw)
                 doc_num  = doc_num_raw or (
@@ -320,16 +303,13 @@ def _parse_hcpa_table(html: str, owner_parts: list[str]) -> dict:
         "prop_address": "", "prop_city": "", "prop_state": "FL", "prop_zip": "",
         "mail_address": "", "mail_city": "", "mail_state": "FL", "mail_zip": "",
     }
-
     soup = BeautifulSoup(html, "lxml")
-
     target_table = None
     for table in soup.find_all("table"):
         header_text = table.get_text(" ", strip=True).upper()
         if "PROPERTY ADDRESS" in header_text and "OWNER" in header_text:
             target_table = table
             break
-
     if not target_table:
         return empty
 
@@ -340,7 +320,6 @@ def _parse_hcpa_table(html: str, owner_parts: list[str]) -> dict:
     header_cells = rows[0].find_all(["th", "td"])
     headers = [c.get_text(" ", strip=True).upper() for c in header_cells]
     address_col = next((i for i, h in enumerate(headers) if "ADDRESS" in h), None)
-
     if address_col is None:
         return empty
 
@@ -351,14 +330,11 @@ def _parse_hcpa_table(html: str, owner_parts: list[str]) -> dict:
         cells = row.find_all("td")
         if not cells or address_col >= len(cells):
             continue
-
         addr_raw = cells[address_col].get_text(" ", strip=True).upper()
-        if not addr_raw or addr_raw == "—":
+        if not addr_raw or addr_raw == "-":
             continue
-
         row_text = _norm(row.get_text(" ", strip=True))
         score = sum(1 for p in owner_parts if len(p) > 2 and p in row_text)
-
         if score > best_score:
             best_score = score
             best_match = addr_raw
@@ -388,7 +364,6 @@ async def hcpa_lookup(page, owner_name: str) -> dict:
         "prop_address": "", "prop_city": "", "prop_state": "FL", "prop_zip": "",
         "mail_address": "", "mail_city": "", "mail_state": "FL", "mail_zip": "",
     }
-
     n = _norm(owner_name)
     if not n or _is_institution(n):
         return empty
@@ -403,7 +378,6 @@ async def hcpa_lookup(page, owner_name: str) -> dict:
     try:
         await page.goto(search_url, wait_until="networkidle", timeout=30_000)
         await page.wait_for_timeout(2_000)
-
         try:
             await page.wait_for_selector("table", timeout=6_000)
         except Exception:
@@ -417,7 +391,6 @@ async def hcpa_lookup(page, owner_name: str) -> dict:
                      n[:40], addr["prop_address"], addr["prop_city"])
             return addr
 
-        # Fallback: last name only
         if len(parts) >= 2:
             search_url2 = f"{HCPA_BASE}/#/search/basic/owner={parts[0]}"
             await page.goto(search_url2, wait_until="networkidle", timeout=20_000)
@@ -444,316 +417,68 @@ async def hcpa_lookup(page, owner_name: str) -> dict:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Clerk scraper
+# Forewarn phone lookup
 # ─────────────────────────────────────────────────────────────────────────────
 
-async def scrape_one_doc_type(
-    page, doc_code: str, date_from: str, date_to: str
-) -> list[dict]:
-    option_value = CLERK_OPTION_VALUES.get(doc_code)
-    if not option_value:
-        return []
-
-    results = []
-    for attempt in range(1, 4):
-        try:
-            await page.goto(CLERK_URL, wait_until="networkidle", timeout=60_000)
-            await page.wait_for_timeout(2_000)
-
-            set_result = await page.evaluate(f"""
-                () => {{
-                    const sel = document.getElementById('OBKey__1285_1');
-                    if (!sel) return 'ERROR: select not found';
-                    let found = null;
-                    for (const opt of sel.options) {{
-                        if (opt.value === '{option_value}') {{ found = opt; break; }}
-                    }}
-                    if (!found) return 'ERROR: option not found';
-                    sel.value = found.value;
-                    sel.dispatchEvent(new Event('change', {{bubbles: true}}));
-                    if (window.jQuery) window.jQuery(sel).trigger('chosen:updated');
-                    return 'OK: ' + found.value;
-                }}
-            """)
-            log.info("[%s] dropdown → %s", doc_code, set_result)
-            if "ERROR" in str(set_result):
-                return []
-
-            await page.wait_for_timeout(500)
-            await page.evaluate(f"""
-                () => {{
-                    const b = document.getElementById('OBKey__1634_1');
-                    const e = document.getElementById('OBKey__1634_2');
-                    if (b) {{ b.value = '{date_from}'; b.dispatchEvent(new Event('change', {{bubbles:true}})); }}
-                    if (e) {{ e.value = '{date_to}';   e.dispatchEvent(new Event('change', {{bubbles:true}})); }}
-                }}
-            """)
-            await page.wait_for_timeout(300)
-            await page.evaluate("""
-                () => {
-                    const btn = document.getElementById('sub');
-                    if (btn) { btn.click(); return; }
-                    for (const el of document.querySelectorAll('button'))
-                        if ((el.textContent||'').trim().toUpperCase()==='SEARCH') { el.click(); return; }
-                }
-            """)
-            log.info("[%s] search clicked", doc_code)
-            await page.wait_for_load_state("networkidle", timeout=30_000)
-            await page.wait_for_timeout(3_000)
-
-            page_num = 1
-            while True:
-                html = await page.content()
-                rows = _parse_html(html)
-                results.extend(rows)
-                log.info("[%s] pg %d: +%d rows (total %d)",
-                         doc_code, page_num, len(rows), len(results))
-                soup = BeautifulSoup(html, "lxml")
-                if not soup.find("a", string=re.compile(r"^\s*(Next|>>)\s*$", re.I)):
-                    break
-                try:
-                    await page.click("a:has-text('Next')", timeout=8_000)
-                    await page.wait_for_load_state("networkidle", timeout=20_000)
-                    await page.wait_for_timeout(1_500)
-                    page_num += 1
-                except Exception:
-                    break
-
-            log.info("[%s] DONE — %d records", doc_code, len(results))
-            return results
-
-        except PWTimeout:
-            log.warning("[%s] timeout attempt %d/3", doc_code, attempt)
-        except Exception as exc:
-            log.warning("[%s] error attempt %d: %s", doc_code, attempt, exc)
-        await asyncio.sleep(3)
-    return results
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Main
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Forewarn phone lookup — uses bearer token from Playwright login session
-# then calls api.forewarn.com/api/search directly (no UI scraping needed)
-# ─────────────────────────────────────────────────────────────────────────────
-
-async def forewarn_get_token(page) -> str:
-    """Log into Forewarn via Playwright and extract the bearer token."""
-    if not FOREWARN_EMAIL or not FOREWARN_PASSWORD:
-        log.warning("Forewarn credentials not set — skipping phone lookup")
+def forewarn_refresh(token: str) -> str:
+    """Call refresh endpoint to extend session. Returns refreshed token or empty."""
+    if not token:
         return ""
     try:
-        await page.goto("https://app.forewarn.com/", wait_until="networkidle", timeout=30_000)
-        await page.wait_for_timeout(2_000)
-
-        # If already logged in, grab token from localStorage/sessionStorage
-        token = await page.evaluate("""
-            () => {
-                for (let i = 0; i < localStorage.length; i++) {
-                    const key = localStorage.key(i);
-                    const val = localStorage.getItem(key);
-                    if (val && val.length > 20 && (key.includes('token') || key.includes('auth') || key.includes('jwt'))) {
-                        return val;
-                    }
-                }
-                for (let i = 0; i < sessionStorage.length; i++) {
-                    const key = sessionStorage.key(i);
-                    const val = sessionStorage.getItem(key);
-                    if (val && val.length > 20 && (key.includes('token') || key.includes('auth') || key.includes('jwt'))) {
-                        return val;
-                    }
-                }
-                return '';
-            }
-        """)
-        if token:
-            log.info("Forewarn token found in storage")
-            return token.strip()
-
-        # Need to log in — intercept the API call to grab the token
-        token_holder = {"value": ""}
-
-        async def intercept_response(response):
-            if "forewarn.com" in response.url and response.status == 200:
-                try:
-                    headers = response.headers
-                    auth = headers.get("authorization", "")
-                    if auth:
-                        token_holder["value"] = auth.replace("bearer ", "").replace("Bearer ", "").strip()
-                except Exception:
-                    pass
-
-        # Navigate to login
-        await page.goto("https://app.forewarn.com/login", wait_until="networkidle", timeout=30_000)
-        await page.wait_for_timeout(1_500)
-
-        # Fill credentials
-        for sel in ["input[type='email']", "input[placeholder*='mail']", "input[name*='email']"]:
-            try:
-                el = await page.query_selector(sel)
-                if el and await el.is_visible():
-                    await el.fill(FOREWARN_EMAIL)
-                    break
-            except Exception:
-                continue
-
-        for sel in ["input[type='password']"]:
-            try:
-                el = await page.query_selector(sel)
-                if el:
-                    await el.fill(FOREWARN_PASSWORD)
-                    break
-            except Exception:
-                continue
-
-        # Intercept network to grab token
-        token_from_search = {"value": ""}
-
-        async def capture_auth(request):
-            if "api.forewarn.com" in request.url:
-                auth = request.headers.get("authorization", "")
-                if auth:
-                    # Store the full auth header value as-is
-                    token_from_search["value"] = auth.strip()
-                    log.info("Captured auth header: %s...", auth[:40])
-
-        page.on("request", capture_auth)
-
-        # Click login
-        await page.evaluate("""
-            () => {
-                for (const btn of document.querySelectorAll('button')) {
-                    const t = btn.textContent.trim().toUpperCase();
-                    if (t.includes('SIGN') || t.includes('LOG') || t.includes('LOGIN')) {
-                        btn.click(); return;
-                    }
-                }
-                const sub = document.querySelector('button[type=submit]');
-                if (sub) sub.click();
-            }
-        """)
-        await page.wait_for_load_state("networkidle", timeout=15_000)
-        await page.wait_for_timeout(2_000)
-
-        # Do a dummy search to trigger an authenticated API call and capture the token
-        await page.goto("https://app.forewarn.com/search", wait_until="networkidle", timeout=20_000)
-        await page.wait_for_timeout(1_000)
-
-        # Click Search By Name and do a quick search to get the token
-        await page.evaluate("""
-            () => {
-                const els = [...document.querySelectorAll('a, button, span')];
-                const el = els.find(e => e.textContent.toUpperCase().includes('SEARCH BY NAME'));
-                if (el) el.click();
-            }
-        """)
-        await page.wait_for_timeout(1_000)
-
-        # Fill and submit a test search
-        for sel in ["input[placeholder*='First']", "input[placeholder*='first']"]:
-            try:
-                el = await page.query_selector(sel)
-                if el and await el.is_visible():
-                    await el.fill("John")
-                    break
-            except Exception:
-                continue
-        for sel in ["input[placeholder*='Last']", "input[placeholder*='last']"]:
-            try:
-                el = await page.query_selector(sel)
-                if el and await el.is_visible():
-                    await el.fill("Smith")
-                    break
-            except Exception:
-                continue
-
-        await page.evaluate("""
-            () => {
-                for (const btn of document.querySelectorAll('button')) {
-                    if (btn.textContent.trim().toUpperCase() === 'SEARCH') { btn.click(); return; }
-                }
-            }
-        """)
-        await page.wait_for_load_state("networkidle", timeout=10_000)
-        await page.wait_for_timeout(1_500)
-
-        if token_from_search["value"]:
-            log.info("Forewarn bearer token captured: %s...", token_from_search["value"][:20])
-            return token_from_search["value"]
-
-        # Last resort: check all localStorage/sessionStorage keys
-        all_storage = await page.evaluate("""
-            () => {
-                const data = {};
-                for (let i = 0; i < localStorage.length; i++) {
-                    const k = localStorage.key(i);
-                    data['ls_' + k] = localStorage.getItem(k);
-                }
-                for (let i = 0; i < sessionStorage.length; i++) {
-                    const k = sessionStorage.key(i);
-                    data['ss_' + k] = sessionStorage.getItem(k);
-                }
-                return data;
-            }
-        """)
-        log.info("Storage keys: %s", list(all_storage.keys())[:20])
-        for k, v in all_storage.items():
-            if v and len(str(v)) > 10:
-                log.info("  %s = %s...", k, str(v)[:60])
-
-        log.warning("Could not capture Forewarn bearer token — URL: %s", page.url)
-        return ""
-
+        r = requests.patch(
+            "https://api.forewarn.com/api/authentication/refresh",
+            headers={
+                "Authorization": token,
+                "Content-Type": "application/json",
+                "Origin": "https://app.forewarn.com",
+                "Referer": "https://app.forewarn.com/",
+                "User-Agent": "Mozilla/5.0",
+            },
+            timeout=10,
+        )
+        if r.status_code == 200:
+            session_id = r.json().get("sessionId", "")
+            if session_id:
+                log.info("Forewarn token refreshed — expires %s",
+                         r.json().get("expires", "?"))
+                return f"bearer {session_id}"
+        log.warning("Forewarn refresh failed: %s %s", r.status_code, r.text[:100])
     except Exception as e:
-        log.warning("Forewarn token error: %s", e)
-        return ""
+        log.warning("Forewarn refresh error: %s", e)
+    return ""
 
 
-def forewarn_search(bearer_token: str, first: str, last: str, city: str = "") -> str:
-    """
-    Call Forewarn API directly with bearer token.
-    Returns the first mobile phone number for the best matching result.
-    """
-    if not bearer_token:
+def forewarn_search(token: str, first: str, last: str, city: str = "") -> str:
+    """Search Forewarn by name. Returns first mobile number for best FL match."""
+    if not token:
         return ""
     try:
-        import requests as req
-        headers = {
-            "Authorization": bearer_token,  # full value e.g. "bearer abc123..."
-            "Content-Type": "application/json",
-            "Origin": "https://app.forewarn.com",
-            "Referer": "https://app.forewarn.com/",
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
-        }
-        payload = {"firstName": first.title(), "lastName": last.title()}
-        r = req.post(
+        r = requests.post(
             "https://api.forewarn.com/api/search",
-            json=payload,
-            headers=headers,
+            json={"firstName": first.title(), "lastName": last.title()},
+            headers={
+                "Authorization": token,
+                "Content-Type": "application/json",
+                "Origin": "https://app.forewarn.com",
+                "Referer": "https://app.forewarn.com/",
+                "User-Agent": "Mozilla/5.0",
+            },
             timeout=15,
         )
         if r.status_code != 200:
-            log.info("Forewarn API %s for %s %s: %s", r.status_code, first, last, r.text[:200])
+            log.debug("Forewarn %s for %s %s: %s",
+                      r.status_code, first, last, r.text[:80])
             return ""
 
-        data = r.json()
-        results = data.get("result", [])
-        if not results:
-            return ""
-
-        # Pick best result — prefer one matching our city (FL)
-        best = None
+        results = r.json().get("result", [])
         city_upper = city.upper() if city else ""
 
+        # Pick best result: non-dead, FL address matching our city
+        best = None
         for res in results:
             if res.get("isDead"):
                 continue
-            addresses = res.get("address", [])
-            # Check if any address matches our city/state
-            for addr in addresses:
+            for addr in res.get("address", []):
                 if addr.get("state") == "FL":
                     if not city_upper or city_upper in addr.get("city", "").upper():
                         best = res
@@ -761,7 +486,18 @@ def forewarn_search(bearer_token: str, first: str, last: str, city: str = "") ->
             if best:
                 break
 
-        # Fallback: first non-dead result
+        # Fallback: any non-dead FL result
+        if not best:
+            for res in results:
+                if not res.get("isDead"):
+                    for addr in res.get("address", []):
+                        if addr.get("state") == "FL":
+                            best = res
+                            break
+                if best:
+                    break
+
+        # Final fallback: first non-dead result
         if not best:
             for res in results:
                 if not res.get("isDead"):
@@ -771,20 +507,16 @@ def forewarn_search(bearer_token: str, first: str, last: str, city: str = "") ->
         if not best:
             return ""
 
-        # Get first mobile phone number
+        # Return first mobile number
         for phone in best.get("phone", []):
             if phone.get("type", "").lower() == "mobile" and phone.get("number"):
                 return phone["number"]
 
-        # Fallback: any phone number
         phones = best.get("phone", [])
-        if phones:
-            return phones[0].get("number", "")
-
-        return ""
+        return phones[0].get("number", "") if phones else ""
 
     except Exception as e:
-        log.debug("Forewarn search error [%s %s]: %s", first, last, e)
+        log.debug("Forewarn error [%s %s]: %s", first, last, e)
         return ""
 
 
@@ -879,222 +611,6 @@ async def scrape_one_doc_type(
 # Main
 # ─────────────────────────────────────────────────────────────────────────────
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Forewarn phone number lookup via Playwright
-# ─────────────────────────────────────────────────────────────────────────────
-
-async def forewarn_login(page) -> bool:
-    """Log into Forewarn. Returns True on success."""
-    if not FOREWARN_EMAIL or not FOREWARN_PASSWORD:
-        log.warning("Forewarn credentials not set — skipping phone lookup")
-        return False
-    try:
-        await page.goto("https://app.forewarn.com/login", wait_until="networkidle", timeout=30_000)
-        await page.wait_for_timeout(2_000)
-
-        # Fill email
-        await page.fill("input[type='email'], input[name='email'], input[placeholder*='mail']", FOREWARN_EMAIL)
-        await page.wait_for_timeout(300)
-
-        # Fill password
-        await page.fill("input[type='password']", FOREWARN_PASSWORD)
-        await page.wait_for_timeout(300)
-
-        # Click login button
-        await page.evaluate("""
-            () => {
-                for (const btn of document.querySelectorAll('button')) {
-                    const t = btn.textContent.trim().toUpperCase();
-                    if (t.includes('SIGN IN') || t.includes('LOG IN') || t.includes('LOGIN')) {
-                        btn.click(); return;
-                    }
-                }
-                // fallback — click first submit button
-                const sub = document.querySelector('button[type=submit]');
-                if (sub) sub.click();
-            }
-        """)
-        await page.wait_for_load_state("networkidle", timeout=15_000)
-        await page.wait_for_timeout(2_000)
-
-        # Check if logged in — search page should be visible
-        if "search" in page.url or "forewarn" in page.url:
-            log.info("Forewarn login successful")
-            return True
-        log.warning("Forewarn login may have failed — URL: %s", page.url)
-        return False
-    except Exception as e:
-        log.warning("Forewarn login error: %s", e)
-        return False
-
-
-async def forewarn_lookup(page, owner_name: str, zip_code: str) -> str:
-    """
-    Search Forewarn by name + zip and return the first mobile phone number.
-    Returns phone number string or empty string.
-    """
-    n = _norm(owner_name)
-    if not n or _is_institution(n):
-        return ""
-
-    first, last = _split_name(n)
-    if not first or not last:
-        return ""
-
-    try:
-        # Navigate to search page and click "SEARCH BY NAME"
-        await page.goto("https://app.forewarn.com/search", wait_until="networkidle", timeout=20_000)
-        await page.wait_for_timeout(1_500)
-
-        # Click "SEARCH BY NAME" link to get name fields
-        await page.evaluate("""
-            () => {
-                const links = document.querySelectorAll('a, button, span');
-                for (const el of links) {
-                    if (el.textContent.trim().toUpperCase().includes('SEARCH BY NAME')) {
-                        el.click(); return;
-                    }
-                }
-            }
-        """)
-        await page.wait_for_timeout(1_500)
-
-        # Fill first name
-        for sel in ["input[placeholder*='First']", "input[name*='first']",
-                    "input[id*='first']", "input[aria-label*='First']"]:
-            try:
-                el = await page.query_selector(sel)
-                if el and await el.is_visible():
-                    await el.fill(first.title())
-                    break
-            except Exception:
-                continue
-
-        # Fill last name
-        for sel in ["input[placeholder*='Last']", "input[name*='last']",
-                    "input[id*='last']", "input[aria-label*='Last']"]:
-            try:
-                el = await page.query_selector(sel)
-                if el and await el.is_visible():
-                    await el.fill(last.title())
-                    break
-            except Exception:
-                continue
-
-        # Fill zip code
-        if zip_code:
-            for sel in ["input[placeholder*='Zip']", "input[placeholder*='zip']",
-                        "input[name*='zip']", "input[id*='zip']"]:
-                try:
-                    el = await page.query_selector(sel)
-                    if el and await el.is_visible():
-                        await el.fill(zip_code[:5])
-                        break
-                except Exception:
-                    continue
-
-        await page.wait_for_timeout(300)
-
-        # Click Search button
-        await page.evaluate("""
-            () => {
-                for (const btn of document.querySelectorAll('button')) {
-                    const t = btn.textContent.trim().toUpperCase();
-                    if (t === 'SEARCH' || t.includes('SEARCH')) { btn.click(); return; }
-                }
-            }
-        """)
-
-        await page.wait_for_load_state("networkidle", timeout=15_000)
-        await page.wait_for_timeout(2_000)
-
-        # On results page — find the best match and click it
-        # Results show full name + address — match by last name at minimum
-        html = await page.content()
-        from bs4 import BeautifulSoup as BS
-        soup = BS(html, "lxml")
-
-        # Find result rows — look for elements containing the name
-        last_upper = last.upper()
-        first_upper = first.upper()
-
-        # Try clicking the first result that contains our last name
-        clicked = await page.evaluate(f"""
-            () => {{
-                const items = document.querySelectorAll(
-                    '[class*="result"], [class*="card"], [class*="item"], li, tr'
-                );
-                for (const item of items) {{
-                    const t = item.textContent.toUpperCase();
-                    if (t.includes('{last_upper}') && t.includes('{first_upper}')) {{
-                        const link = item.querySelector('a') || item;
-                        link.click();
-                        return true;
-                    }}
-                }}
-                // fallback — click first result link
-                const first = document.querySelector(
-                    '[class*="result"] a, [class*="card"] a, .results a'
-                );
-                if (first) {{ first.click(); return true; }}
-                return false;
-            }}
-        """)
-
-        if not clicked:
-            log.debug("Forewarn: no result found for %s %s", first, last)
-            return ""
-
-        await page.wait_for_load_state("networkidle", timeout=15_000)
-        await page.wait_for_timeout(1_500)
-
-        # Now on profile page — click Phone Records
-        await page.evaluate("""
-            () => {
-                const els = document.querySelectorAll('a, button, [class*="record"], [class*="section"]');
-                for (const el of els) {
-                    if (el.textContent.toUpperCase().includes('PHONE')) {
-                        el.click(); return;
-                    }
-                }
-            }
-        """)
-
-        await page.wait_for_load_state("networkidle", timeout=10_000)
-        await page.wait_for_timeout(1_500)
-
-        # On phone records page — grab first mobile number
-        phone_js = r"""
-            () => {
-                const rows = document.querySelectorAll('tr, [class*="row"], [class*="record"]');
-                for (const row of rows) {
-                    const text = row.textContent.toUpperCase();
-                    if (text.includes('MOBILE')) {
-                        const match = row.textContent.match(
-                            /\b(\d{3}[-. ]\d{3}[-. ]\d{4})\b/
-                        );
-                        if (match) return match[0];
-                    }
-                }
-                const match = document.body.textContent.match(/\b(\d{3}[-. ]\d{3}[-. ]\d{4})\b/);
-                return match ? match[0] : '';
-            }
-        """
-        phone = await page.evaluate(phone_js)
-
-        if phone:
-            log.info("  ✓ Forewarn '%s %s' → %s", first, last, phone)
-        else:
-            log.debug("  ✗ Forewarn no phone: %s %s", first, last)
-
-        return phone or ""
-
-    except Exception as e:
-        log.debug("Forewarn lookup error [%s %s]: %s", first, last, e)
-        return ""
-
-
 async def main():
     date_to_dt   = datetime.utcnow()
     date_from_dt = date_to_dt - timedelta(days=LOOKBACK_DAYS)
@@ -1102,8 +618,8 @@ async def main():
     date_to      = date_to_dt.strftime("%m/%d/%Y")
 
     log.info("=" * 64)
-    log.info("Hillsborough County Motivated Seller Scraper  v36")
-    log.info("Range : %s → %s  (%d days)", date_from, date_to, LOOKBACK_DAYS)
+    log.info("Hillsborough County Motivated Seller Scraper  v37")
+    log.info("Range : %s to %s  (%d days)", date_from, date_to, LOOKBACK_DAYS)
     log.info("=" * 64)
 
     all_records: list[dict] = []
@@ -1124,12 +640,11 @@ async def main():
             timezone_id="America/New_York",
         )
         clerk_page = await ctx.new_page()
-        hcpa_page      = await ctx.new_page()
-        forewarn_page  = await ctx.new_page()
+        hcpa_page  = await ctx.new_page()
 
-        # ── Step 1: Scrape clerk portal ───────────────────────────────────────
+        # Step 1: Scrape clerk portal
         for doc_code, (cat, cat_label) in DOC_TYPE_MAP.items():
-            log.info("── [%s] %s", doc_code, cat_label)
+            log.info("-- [%s] %s", doc_code, cat_label)
             raw_rows = await scrape_one_doc_type(
                 clerk_page, doc_code, date_from, date_to
             )
@@ -1156,7 +671,8 @@ async def main():
                     "mail_address": "", "mail_city": "",
                     "mail_state":   "FL", "mail_zip": "",
                     "clerk_url":    r.get("clerk_url", ""),
-                    "flags":        [], "score": 0, "phone": "",
+                    "phone":        "",
+                    "flags":        [], "score": 0,
                 }
                 score, flags = score_record(base_rec)
                 base_rec["score"] = score
@@ -1165,35 +681,29 @@ async def main():
 
         log.info("Scraped %d total records", len(all_records))
 
-        # ── Step 2: Enrich only score >= 70 leads ────────────────────────────
-        # Dedupe owners from qualifying records only
+        # Step 2: HCPA address enrichment
         unique_owners: dict[str, dict] = {}
         for rec in all_records:
             owner = rec.get("owner", "")
-            score = rec.get("score", 0)
-            if (owner and score >= ENRICH_MIN_SCORE
+            if (owner and rec.get("score", 0) >= ENRICH_MIN_SCORE
                     and not _is_institution(owner)
                     and owner not in unique_owners):
                 unique_owners[owner] = {}
 
-        log.info("Enriching %d unique owners (score >= %d) via HCPA…",
-                 len(unique_owners), ENRICH_MIN_SCORE)
-
-        enriched_count = 0
+        log.info("Enriching %d unique owners via HCPA...", len(unique_owners))
+        enriched = 0
         for i, owner in enumerate(unique_owners):
             addr = await hcpa_lookup(hcpa_page, owner)
             unique_owners[owner] = addr
             if addr.get("prop_address"):
-                enriched_count += 1
+                enriched += 1
             if (i + 1) % 25 == 0:
                 log.info("  HCPA: %d / %d — %d with address",
-                         i + 1, len(unique_owners), enriched_count)
+                         i + 1, len(unique_owners), enriched)
             await asyncio.sleep(0.5)
 
-        log.info("HCPA done: %d / %d owners got addresses",
-                 enriched_count, len(unique_owners))
+        log.info("HCPA done: %d / %d owners got addresses", enriched, len(unique_owners))
 
-        # Apply addresses back to all records with matching owner
         for rec in all_records:
             addr = unique_owners.get(rec.get("owner", ""), {})
             if addr.get("prop_address"):
@@ -1202,71 +712,61 @@ async def main():
                 rec["score"] = score
                 rec["flags"] = flags
 
-        # ── Step 3: Forewarn phone lookup ─────────────────────────────────────
-        if FOREWARN_EMAIL and FOREWARN_PASSWORD:
-            log.info("Getting Forewarn bearer token…")
-            bearer_token = await forewarn_get_token(forewarn_page)
-            if bearer_token:
-                # Dedupe owners for lookup
-                to_call = [
-                    r for r in all_records
-                    if r.get("score", 0) >= ENRICH_MIN_SCORE
-                    and not _is_institution(r.get("owner", ""))
-                    and not r.get("phone")
-                ]
-                seen_owners: set[str] = set()
-                unique_call = []
-                for r in to_call:
-                    if r["owner"] not in seen_owners:
-                        seen_owners.add(r["owner"])
-                        unique_call.append(r)
-
-                log.info("Forewarn: looking up %d unique owners via API…", len(unique_call))
-                # Test first lookup with full debug
-                if unique_call:
-                    test_rec = unique_call[0]
-                    test_first, test_last = _split_name(test_rec["owner"])
-                    log.info("TEST Forewarn lookup: owner=%s first=%s last=%s city=%s",
-                             test_rec["owner"], test_first, test_last,
-                             test_rec.get("prop_city",""))
-                    test_phone = forewarn_search(bearer_token, test_first, test_last,
-                                                  test_rec.get("prop_city",""))
-                    log.info("TEST result: phone=%s", test_phone or "NONE")
-                phone_map: dict[str, str] = {}
-                fw_found = 0
-
-                for i, rec in enumerate(unique_call):
-                    first, last = _split_name(rec["owner"])
-                    if not first or not last:
-                        continue
-                    city = rec.get("prop_city") or rec.get("mail_city") or ""
-                    phone = forewarn_search(bearer_token, first, last, city)
-                    phone_map[rec["owner"]] = phone
-                    if phone:
-                        fw_found += 1
-                        log.info("  ✓ Forewarn '%s' → %s", rec["owner"][:40], phone)
-                    if (i + 1) % 25 == 0:
-                        log.info("  Forewarn: %d / %d — %d with phone",
-                                 i + 1, len(unique_call), fw_found)
-                    await asyncio.sleep(0.5)
-
-                for rec in all_records:
-                    phone = phone_map.get(rec.get("owner", ""), "")
-                    if phone:
-                        rec["phone"] = phone
-
-                log.info("Forewarn done: %d / %d owners got phone numbers",
-                         fw_found, len(unique_call))
-            else:
-                log.warning("Could not get Forewarn token — skipping phone lookup")
-        else:
-            log.info("Forewarn credentials not configured — skipping phone lookup")
-
         await browser.close()
 
-    # ── Sort and save ─────────────────────────────────────────────────────────
+    # Step 3: Forewarn phone lookup
+    if FOREWARN_TOKEN:
+        log.info("Refreshing Forewarn token...")
+        token = forewarn_refresh(FOREWARN_TOKEN)
+        if not token:
+            log.warning("Forewarn token expired — log into app.forewarn.com and update FOREWARN_TOKEN secret")
+        else:
+            to_call = [
+                r for r in all_records
+                if r.get("score", 0) >= ENRICH_MIN_SCORE
+                and not _is_institution(r.get("owner", ""))
+                and not r.get("phone")
+            ]
+            seen: set[str] = set()
+            unique_call = []
+            for r in to_call:
+                if r["owner"] not in seen:
+                    seen.add(r["owner"])
+                    unique_call.append(r)
+
+            log.info("Forewarn: looking up %d unique owners...", len(unique_call))
+            phone_map: dict[str, str] = {}
+            fw_found = 0
+
+            for i, rec in enumerate(unique_call):
+                first, last = _split_name(rec["owner"])
+                if not first or not last:
+                    continue
+                city  = rec.get("prop_city") or rec.get("mail_city") or ""
+                phone = forewarn_search(token, first, last, city)
+                phone_map[rec["owner"]] = phone
+                if phone:
+                    fw_found += 1
+                    log.info("  + Forewarn '%s' -> %s", rec["owner"][:40], phone)
+                if (i + 1) % 25 == 0:
+                    log.info("  Forewarn: %d / %d — %d with phone",
+                             i + 1, len(unique_call), fw_found)
+                await asyncio.sleep(0.3)
+
+            for rec in all_records:
+                phone = phone_map.get(rec.get("owner", ""), "")
+                if phone:
+                    rec["phone"] = phone
+
+            log.info("Forewarn done: %d / %d owners got phone numbers",
+                     fw_found, len(unique_call))
+    else:
+        log.info("FOREWARN_TOKEN not set — skipping phone lookup")
+
+    # Step 4: Sort and save
     all_records.sort(key=lambda x: x["score"], reverse=True)
-    with_addr = sum(1 for r in all_records if r.get("prop_address"))
+    with_addr  = sum(1 for r in all_records if r.get("prop_address"))
+    with_phone = sum(1 for r in all_records if r.get("phone"))
 
     payload = {
         "fetched_at":    datetime.utcnow().isoformat() + "Z",
@@ -1275,6 +775,7 @@ async def main():
         "lookback_days": LOOKBACK_DAYS,
         "total":         len(all_records),
         "with_address":  with_addr,
+        "with_phone":    with_phone,
         "records":       all_records,
     }
 
@@ -1282,10 +783,10 @@ async def main():
         path.parent.mkdir(parents=True, exist_ok=True)
         with open(path, "w", encoding="utf-8") as fh:
             json.dump(payload, fh, indent=2, default=str)
-        log.info("Saved → %s  (%d records, %d with address)",
-                 path, len(all_records), with_addr)
+        log.info("Saved -> %s  (%d records, %d with address, %d with phone)",
+                 path, len(all_records), with_addr, with_phone)
 
-    # ── GHL CSV ───────────────────────────────────────────────────────────────
+    # Step 5: GHL CSV
     GHL_CSV_PATH.parent.mkdir(parents=True, exist_ok=True)
     GHL_HEADERS = [
         "First Name", "Last Name", "Phone",
@@ -1324,8 +825,9 @@ async def main():
                 "Public Records URL":     r.get("clerk_url", ""),
             })
 
-    log.info("GHL CSV → %s", GHL_CSV_PATH)
-    log.info("DONE — %d total leads | %d with address", len(all_records), with_addr)
+    log.info("GHL CSV -> %s", GHL_CSV_PATH)
+    log.info("DONE — %d total leads | %d with address | %d with phone",
+             len(all_records), with_addr, with_phone)
 
 
 if __name__ == "__main__":
