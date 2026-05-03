@@ -1,9 +1,9 @@
 {
-  "fetched_at": "2026-05-02T12:21:40.804671Z",
+  "fetched_at": "2026-05-03T12:17:10.497785Z",
   "source": "Hillsborough County Clerk of Courts",
   "date_range": {
-    "from": "04/25/2026",
-    "to": "05/02/2026"
+    "from": "04/26/2026",
+    "to": "05/03/2026"
   },
   "lookback_days": 7,
   "total": 2520,
@@ -12371,11 +12371,11 @@
       "filed": "2026-04-28",
       "cat": "judgment",
       "cat_label": "Judgment",
-      "owner": "N/A",
-      "filer": "N/A (VIEW DOCUMENT)",
-      "grantee": "N/A",
+      "owner": "QUASHIE NERIZA",
+      "filer": "MIDLAND CREDIT MANAGEMENT INC",
+      "grantee": "QUASHIE NERIZA",
       "amount": null,
-      "legal": "",
+      "legal": "25 CC 036089",
       "prop_address": "",
       "prop_city": "",
       "prop_state": "FL",
