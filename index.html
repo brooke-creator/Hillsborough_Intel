@@ -709,10 +709,10 @@ function render() {
 function exportCSV() {
   // Export only real homeowner leads (exclude corp/LLC)
   const rows = getFiltered().filter(r => !isCorpOwner(r));
-  const headers = ['Score','Doc Type','Category','Filed','Owner','Property Address','Property City','Property State','Property Zip','Mailing Address','Mailing City','Mailing State','Mailing Zip','Flags','Doc Number','Clerk URL'];
+  const headers = ['Score','Doc Type','Category','Filed','Owner','Phone','Property Address','Property City','Property State','Property Zip','Mailing Address','Mailing City','Mailing State','Mailing Zip','Flags','Doc Number','Clerk URL'];
   const esc = v => `"${String(v||'').replace(/"/g,'""')}"`;
   const csv = [headers.join(','), ...rows.map(r => [
-    r.score, r.doc_type, r.cat_label, r.filed, r.owner,
+    r.score, r.doc_type, r.cat_label, r.filed, r.owner, r.phone||'',
     r.prop_address, r.prop_city, r.prop_state, r.prop_zip,
     r.mail_address, r.mail_city, r.mail_state, r.mail_zip,
     (r.flags||[]).join(' | '), r.doc_num, r.clerk_url
