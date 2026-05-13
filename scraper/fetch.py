@@ -46,7 +46,7 @@ DOC_TYPE_MAP = {
     "LN":       ("lien",         "Lien"),
     "MEDLN":    ("lien",         "Medicaid Lien"),
     "PRO":      ("probate",      "Probate"),
-    "NOC":      ("construction", "Notice of Commencement"),
+
     "RELLP":    ("release",      "Release Lis Pendens"),
 }
 
@@ -62,7 +62,7 @@ CLERK_OPTION_VALUES = {
     "LN":       "(LN) LIEN",
     "MEDLN":    "(MEDLN) MEDICAID LIEN",
     "PRO":      "(PRO) PROBATE DOCUMENTS",
-    "NOC":      "(NOC) NOTICE OF COMMENCEMENT",
+
     "RELLP":    "(RELLP) RELEASE LIS PENDENS",
 }
 
@@ -764,55 +764,6 @@ async def main():
                 rec["flags"] = flags
 
         await browser.close()
-
-    # Step 3: Forewarn phone lookup
-    if FOREWARN_TOKEN:
-        log.info("Refreshing Forewarn token...")
-        token = forewarn_refresh(FOREWARN_TOKEN)
-        if not token:
-            log.warning("Forewarn token expired — log into app.forewarn.com and update FOREWARN_TOKEN secret")
-        else:
-            to_call = [
-                r for r in all_records
-                if r.get("score", 0) >= ENRICH_MIN_SCORE
-                and not _is_placeholder(r.get("owner", ""))
-                and not r.get("phone")
-            ]
-            seen: set[str] = set()
-            unique_call = []
-            for r in to_call:
-                if r["owner"] not in seen:
-                    seen.add(r["owner"])
-                    unique_call.append(r)
-
-            log.info("Forewarn: looking up %d unique owners...", len(unique_call))
-            phone_map: dict[str, str] = {}
-            fw_found = 0
-
-            for i, rec in enumerate(unique_call):
-                first, last = _split_name(rec["owner"])
-                if not first or not last:
-                    continue
-                city  = rec.get("prop_city") or rec.get("mail_city") or ""
-                phone = forewarn_search(token, first, last, city)
-                phone_map[rec["owner"]] = phone
-                if phone:
-                    fw_found += 1
-                    log.info("  + Forewarn '%s' -> %s", rec["owner"][:40], phone)
-                if (i + 1) % 25 == 0:
-                    log.info("  Forewarn: %d / %d — %d with phone",
-                             i + 1, len(unique_call), fw_found)
-                await asyncio.sleep(0.3)
-
-            for rec in all_records:
-                phone = phone_map.get(rec.get("owner", ""), "")
-                if phone:
-                    rec["phone"] = phone
-
-            log.info("Forewarn done: %d / %d owners got phone numbers",
-                     fw_found, len(unique_call))
-    else:
-        log.info("FOREWARN_TOKEN not set — skipping phone lookup")
 
     # Step 4: Sort and save
     all_records.sort(key=lambda x: x["score"], reverse=True)
