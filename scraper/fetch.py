@@ -2,9 +2,6 @@
 Hillsborough County Motivated Seller Lead Scraper v37
 - Clerk portal scraping (Playwright)
 - HCPA address enrichment (Playwright)
-- Forewarn phone lookup via stored session token + refresh endpoint
-  Set FOREWARN_TOKEN secret as "bearer UUID" from your browser session
-  Token valid 24hrs from login; refresh call extends 30-min expiry
 """
 
 import asyncio
