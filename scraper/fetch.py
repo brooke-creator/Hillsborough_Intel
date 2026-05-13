@@ -87,6 +87,31 @@ INSTITUTION_KEYWORDS = [
     "INTERNAL REVENUE", "DEPARTMENT OF", "STATE OF", "COUNTY OF", "UNITED STATES",
 ]
 
+# Keywords that identify HOA filers
+HOA_KEYWORDS = [
+    "HOMEOWNERS ASSOCIATION", "HOMEOWNER ASSOCIATION", "HOA",
+    "CONDOMINIUM ASSOCIATION", "CONDO ASSOCIATION", "COMMUNITY ASSOCIATION",
+    "PROPERTY OWNERS ASSOCIATION", "POA",
+]
+
+def _lp_subtype(filer: str) -> str:
+    """
+    Classify what kind of LP this is based on who filed it.
+    Returns: 'mortgage' | 'hoa' | 'civil'
+    """
+    f = _norm(filer)
+    if not f:
+        return 'civil'
+    # HOA check first
+    if any(k in f for k in HOA_KEYWORDS):
+        return 'hoa'
+    # Mortgage/bank check
+    if _is_institution(f):
+        return 'mortgage'
+    # Private individual = civil lawsuit
+    return 'civil'
+
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s  %(levelname)-8s  %(message)s",
@@ -185,9 +210,17 @@ def score_record(rec: dict):
     filed = rec.get("filed", "")
 
     if doc == "LP":
-        flags.append("Lis pendens");      s += 10
-    if doc == "LP":
-        flags.append("Pre-foreclosure");  s += 10
+        lp_type = _lp_subtype(rec.get("filer", ""))
+        if lp_type == "mortgage":
+            flags.append("Lis pendens");          s += 10
+            flags.append("Pre-foreclosure");      s += 10
+            flags.append("Mortgage foreclosure"); s += 15
+        elif lp_type == "hoa":
+            flags.append("Lis pendens");          s += 10
+            flags.append("HOA foreclosure");      s += 5
+        else:  # civil
+            flags.append("Lis pendens");          s += 5
+            flags.append("Civil lawsuit");
     if doc in ("JUD", "CCJ", "DRJUD"):
         flags.append("Judgment lien");    s += 10
     if doc in ("LNCORPTX", "TAXDEED"):
@@ -199,8 +232,8 @@ def score_record(rec: dict):
     if re.search(r"\b(LLC|INC|CORP|LTD|TRUST|LP)\b", owner):
         flags.append("LLC / corp owner")
         s += 10
-    if "Lis pendens" in flags and "Pre-foreclosure" in flags:
-        s += 20
+    if "Mortgage foreclosure" in flags:
+        s += 20  # combo bonus for true mortgage foreclosure
 
     try:
         amt = float(rec.get("amount") or 0)
@@ -521,11 +554,8 @@ def forewarn_search(token: str, first: str, last: str, city: str = "") -> str:
         if not best:
             return ""
 
-        # Return first mobile number
-        for phone in best.get("phone", []):
-            if phone.get("type", "").lower() == "mobile" and phone.get("number"):
-                return phone["number"]
-
+        # Return the FIRST number listed — Forewarn sorts by confidence algorithm
+        # (most recent/reliable first) regardless of type
         phones = best.get("phone", [])
         return phones[0].get("number", "") if phones else ""
 
@@ -595,6 +625,11 @@ async def scrape_one_doc_type(
             page_num = 1
             while True:
                 html = await page.content()
+                # Debug: save HTML on first page to inspect structure
+                if page_num == 1 and doc_code == "LP":
+                    with open("data/debug_lp_page.html", "w") as f:
+                        f.write(html)
+                    log.info("[%s] debug HTML saved (%d chars)", doc_code, len(html))
                 rows = _parse_html(html)
                 results.extend(rows)
                 log.info("[%s] pg %d: +%d rows (total %d)",
