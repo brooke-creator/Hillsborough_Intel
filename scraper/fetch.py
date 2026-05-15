@@ -219,6 +219,10 @@ def score_record(rec: dict):
             flags.append("Lis pendens");          s += 5
             flags.append("Civil lawsuit");
     if doc in ("JUD", "CCJ", "DRJUD"):
+        # Skip business vs business disputes — not homeowner leads
+        filer = _norm(rec.get("filer", ""))
+        if _is_institution(owner) and _is_institution(filer):
+            return 0, ["Business dispute"]
         flags.append("Judgment lien");    s += 10
     if doc in ("LNCORPTX", "TAXDEED"):
         flags.append("Tax lien");         s += 10
