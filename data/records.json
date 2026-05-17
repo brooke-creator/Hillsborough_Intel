@@ -1,9 +1,9 @@
 {
-  "fetched_at": "2026-05-16T14:44:11.636450Z",
+  "fetched_at": "2026-05-17T14:48:18.847054Z",
   "source": "Hillsborough County Clerk of Courts",
   "date_range": {
-    "from": "04/18/2026",
-    "to": "04/25/2026"
+    "from": "04/19/2026",
+    "to": "04/26/2026"
   },
   "lookback_days": 7,
   "total": 1753,
