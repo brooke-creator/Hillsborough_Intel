@@ -662,12 +662,10 @@ async def scrape_one_doc_type(
 # ─────────────────────────────────────────────────────────────────────────────
 
 async def main():
-    # Window: 7 days wide, offset 3 weeks back from today
-    # e.g. today May 13 → pulls Apr 15 to Apr 22
-    OFFSET_DAYS  = int(os.getenv("OFFSET_DAYS", "21"))   # how far back the window ends
-    WINDOW_DAYS  = int(os.getenv("WINDOW_DAYS", "7"))    # width of the window
-    date_to_dt   = datetime.utcnow() - timedelta(days=OFFSET_DAYS)
-    date_from_dt = date_to_dt - timedelta(days=WINDOW_DAYS)
+    # Window: 14 days wide, ending yesterday
+    # e.g. today May 18 → pulls May 3 to May 17
+    date_to_dt   = datetime.utcnow() - timedelta(days=1)
+    date_from_dt = date_to_dt - timedelta(days=14)
     date_from    = date_from_dt.strftime("%m/%d/%Y")
     date_to      = date_to_dt.strftime("%m/%d/%Y")
 
