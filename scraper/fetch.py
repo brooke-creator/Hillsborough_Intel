@@ -160,9 +160,35 @@ def _is_placeholder(name: str) -> bool:
     ]
     return any(p in n for p in placeholders)
 
+SKIP_PARTY_KEYWORDS = [
+    "UNKNOWN", "TENANT IN POSSESSION", "TENANT #", "ALL UNKNOWN",
+    "ANY AND ALL", "ANY UNKNOWN", "WHOSE NAMES ARE UNCERTAIN",
+    "WHO MAY CLAIM", "CLAIMING BY, THROUGH", "IF LIVING",
+    "CLERK OF", "STATE OF FLORIDA", "CITY OF TAMPA", "UNITED STATES",
+    "DEPARTMENT OF REVENUE", "SECRETARY OF", "FEDERAL HOUSING",
+    "DOE JANE", "DOE JOHN",
+]
+
+def _is_skip_party(name: str) -> bool:
+    n = _norm(name)
+    return any(k in n for k in SKIP_PARTY_KEYWORDS)
+
+def _best_party(parties_str: str) -> str:
+    """From a slash-separated list of parties, return the best real person name."""
+    if not parties_str:
+        return ""
+    parts = [p.strip() for p in parties_str.split(" / ") if p.strip()]
+    # Filter out skip parties and institutions
+    real = [p for p in parts if not _is_skip_party(p) and not _is_institution(p)]
+    if real:
+        return real[0]
+    # Fallback: first non-skip party even if institution
+    non_skip = [p for p in parts if not _is_skip_party(p)]
+    return non_skip[0] if non_skip else (parts[0] if parts else "")
+
 def _resolve_owner(doc_type: str, grantor: str, grantee: str) -> str:
-    g1 = _norm(grantor)
-    g2 = _norm(grantee)
+    g1 = _best_party(grantor)
+    g2 = _best_party(grantee)
     if doc_type in GRANTEE_IS_OWNER:
         if g2 and not _is_institution(g2):
             return g2
