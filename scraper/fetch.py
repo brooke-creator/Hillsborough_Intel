@@ -569,92 +569,77 @@ def forewarn_search(token: str, first: str, last: str, city: str = "") -> str:
 # Clerk scraper
 # ─────────────────────────────────────────────────────────────────────────────
 
-async def scrape_one_doc_type(
-    page, doc_code: str, date_from: str, date_to: str
-) -> list[dict]:
+def fetch_clerk_records(doc_code: str, date_from: str, date_to: str) -> list[dict]:
+    """
+    Call the Hillsborough Clerk REST API directly.
+    Returns list of raw record dicts.
+    Much faster and more reliable than Playwright scraping.
+    """
     option_value = CLERK_OPTION_VALUES.get(doc_code)
     if not option_value:
         return []
 
-    results = []
-    for attempt in range(1, 4):
-        try:
-            await page.goto(CLERK_URL, wait_until="networkidle", timeout=60_000)
-            await page.wait_for_timeout(2_000)
+    url = "https://publicaccess.hillsclerk.com/Public/ORIUtilities/DocumentSearch/api/Search"
+    payload = {
+        "DocType": [option_value],
+        "RecordDateBegin": date_from,
+        "RecordDateEnd": date_to,
+    }
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "Origin": "https://publicaccess.hillsclerk.com",
+        "Referer": "https://publicaccess.hillsclerk.com/oripublicaccess/",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    }
 
-            set_result = await page.evaluate(f"""
-                () => {{
-                    const sel = document.getElementById('OBKey__1285_1');
-                    if (!sel) return 'ERROR: select not found';
-                    let found = null;
-                    for (const opt of sel.options) {{
-                        if (opt.value === '{option_value}') {{ found = opt; break; }}
-                    }}
-                    if (!found) return 'ERROR: option not found';
-                    sel.value = found.value;
-                    sel.dispatchEvent(new Event('change', {{bubbles: true}}));
-                    if (window.jQuery) window.jQuery(sel).trigger('chosen:updated');
-                    return 'OK: ' + found.value;
-                }}
-            """)
-            log.info("[%s] dropdown → %s", doc_code, set_result)
-            if "ERROR" in str(set_result):
-                return []
+    try:
+        r = requests.post(url, json=payload, headers=headers, timeout=30)
+        if r.status_code != 200:
+            log.warning("[%s] API error %s", doc_code, r.status_code)
+            return []
 
-            await page.wait_for_timeout(500)
-            await page.evaluate(f"""
-                () => {{
-                    const b = document.getElementById('OBKey__1634_1');
-                    const e = document.getElementById('OBKey__1634_2');
-                    if (b) {{ b.value = '{date_from}'; b.dispatchEvent(new Event('change', {{bubbles:true}})); }}
-                    if (e) {{ e.value = '{date_to}';   e.dispatchEvent(new Event('change', {{bubbles:true}})); }}
-                }}
-            """)
-            await page.wait_for_timeout(300)
-            await page.evaluate("""
-                () => {
-                    const btn = document.getElementById('sub');
-                    if (btn) { btn.click(); return; }
-                    for (const el of document.querySelectorAll('button'))
-                        if ((el.textContent||'').trim().toUpperCase()==='SEARCH') { el.click(); return; }
-                }
-            """)
-            log.info("[%s] search clicked", doc_code)
-            await page.wait_for_load_state("networkidle", timeout=30_000)
-            await page.wait_for_timeout(3_000)
+        data = r.json()
+        if not data.get("Success"):
+            log.warning("[%s] API returned Success=false", doc_code)
+            return []
 
-            page_num = 1
-            while True:
-                html = await page.content()
-                # Debug: save HTML on first page to inspect structure
-                if page_num == 1 and doc_code == "LP":
-                    with open("data/debug_lp_page.html", "w") as f:
-                        f.write(html)
-                    log.info("[%s] debug HTML saved (%d chars)", doc_code, len(html))
-                rows = _parse_html(html)
-                results.extend(rows)
-                log.info("[%s] pg %d: +%d rows (total %d)",
-                         doc_code, page_num, len(rows), len(results))
-                soup = BeautifulSoup(html, "lxml")
-                if not soup.find("a", string=re.compile(r"^\s*(Next|>>)\s*$", re.I)):
-                    break
-                try:
-                    await page.click("a:has-text('Next')", timeout=8_000)
-                    await page.wait_for_load_state("networkidle", timeout=20_000)
-                    await page.wait_for_timeout(1_500)
-                    page_num += 1
-                except Exception:
-                    break
+        result_list = data.get("ResultList", []) or []
+        records = []
+        for item in result_list:
+            # Convert Unix timestamp to date string
+            record_date = item.get("RecordDate", 0)
+            try:
+                filed = datetime.utcfromtimestamp(record_date).strftime("%Y-%m-%d")
+            except Exception:
+                filed = ""
 
-            log.info("[%s] DONE — %d records", doc_code, len(results))
-            return results
+            instrument = str(item.get("Instrument", ""))
+            uuid = item.get("UUID", "")
 
-        except PWTimeout:
-            log.warning("[%s] timeout attempt %d/3", doc_code, attempt)
-        except Exception as exc:
-            log.warning("[%s] error attempt %d: %s", doc_code, attempt, exc)
-        await asyncio.sleep(3)
-    return results
+            # Build document URL using UUID
+            clerk_url = "https://publicaccess.hillsclerk.com/oripublicaccess/"
+
+            grantor = " / ".join(item.get("PartiesOne", []))
+            grantee = " / ".join(item.get("PartiesTwo", []))
+
+            records.append({
+                "doc_num":   instrument,
+                "doc_type":  doc_code,
+                "filed":     filed,
+                "grantor":   grantor,
+                "grantee":   grantee,
+                "amount":    item.get("SalesPrice"),
+                "legal":     item.get("Legal") or "",
+                "clerk_url": clerk_url,
+            })
+
+        log.info("[%s] API returned %d records", doc_code, len(records))
+        return records
+
+    except Exception as e:
+        log.warning("[%s] API exception: %s", doc_code, e)
+        return []
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -691,15 +676,12 @@ async def main():
             locale="en-US",
             timezone_id="America/New_York",
         )
-        clerk_page = await ctx.new_page()
-        hcpa_page  = await ctx.new_page()
+        hcpa_page = await ctx.new_page()
 
-        # Step 1: Scrape clerk portal
+        # Step 1: Fetch clerk records via REST API (no Playwright needed)
         for doc_code, (cat, cat_label) in DOC_TYPE_MAP.items():
             log.info("-- [%s] %s", doc_code, cat_label)
-            raw_rows = await scrape_one_doc_type(
-                clerk_page, doc_code, date_from, date_to
-            )
+            raw_rows = fetch_clerk_records(doc_code, date_from, date_to)
             for r in raw_rows:
                 doc_type = r.get("doc_type", "").upper()
                 if doc_type not in TARGET_TYPES:
